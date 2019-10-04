@@ -316,8 +316,20 @@ name of the package archive directory.  You can alter this list if you
 wish to use third party package archives---but do so at your own risk,
 and use only third parties that you think you can trust!
 
-@anchor{Package Signing}
+@anchor{Package Checksums}
 @cindex package security
+@cindex package checksums
+  The maintainers of package archives can add package checksums to
+their packages.  When downloading a package that has a checksum, it
+is used to verify that the correct version of that file has been
+downloaded.  By default, Emacs will verify these checksums
+automatically when available, and ignore it when not.  You can control
+this with the user option @code{package-verify-checksums}.  If you
+want to install only packages with a valid checksum, you can set this
+option to @code{t}.  This improves security, but requires that all
+package archives you use distribute checksums.
+
+@anchor{Package Signing}
 @cindex package signing
   The maintainers of package archives can increase the trust that you
 can have in their packages by @dfn{signing} them.  They generate a
