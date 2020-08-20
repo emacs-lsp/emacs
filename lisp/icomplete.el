@@ -32,7 +32,7 @@
 ;; See `icomplete-completions' docstring for a description of the
 ;; icomplete display format.
 
-;; See the `icomplete-minibuffer-setup-hook' docstring for a means to
+;; See the `icomplete--minibuffer-setup-hook' docstring for a means to
 ;; customize icomplete setup for interoperation with other
 ;; minibuffer-oriented packages.
 
@@ -57,10 +57,10 @@
   :link '(info-link "(emacs)Icomplete")
   :group 'minibuffer)
 
-(defcustom icomplete-separator " | "
-  "String used by Icomplete to separate alternatives in the minibuffer."
-  :type 'string
-  :version "24.4")
+(defcustom icomplete-vertical nil
+  "Enable `icomplete' vertical mode."
+  :type 'bool
+  :version "28.1")
 
 (defcustom icomplete-hide-common-prefix t
   "When non-nil, hide common prefix from completion candidates.
@@ -97,6 +97,12 @@ Otherwise this should be a list of the completion tables (e.g.,
   "Face used by Icomplete for highlighting first match."
   :version "24.4")
 
+(defface icomplete-common-match '((t :inherit 'highlight
+                                     :underline t
+                                     :weight bold))
+  "Face used by Icomplete for highlighting common completion."
+  :version "28.1")
+
 ;;;_* User Customization variables
 (defcustom icomplete-prospects-height 2
   ;; We used to compute how many lines 100 characters would take in
@@ -123,14 +129,16 @@ See `icomplete-delay-completions-threshold'."
 (defvar icomplete-in-buffer nil
   "If non-nil, also use Icomplete when completing in non-mini buffers.")
 
-(defcustom icomplete-minibuffer-setup-hook nil
+(defvar icomplete-ellipsis nil)
+
+(defcustom icomplete--minibuffer-setup-hook nil
   "Icomplete-specific customization of minibuffer setup.
 
 This hook is run during minibuffer setup if Icomplete is active.
 It is intended for use in customizing Icomplete for interoperation
 with other features and packages.  For instance:
 
-  (add-hook \\='icomplete-minibuffer-setup-hook
+  (add-hook \\='icomplete--minibuffer-setup-hook
 	     (lambda () (setq-local max-mini-window-height 3)))
 
 will constrain Emacs to a maximum minibuffer height of 3 lines when
@@ -138,6 +146,10 @@ icompletion is occurring."
   :type 'hook
   :group 'icomplete)
 
+(defvar icomplete--separator nil)
+(defvar icomplete--list-indicators nil)
+(defvar icomplete--require-indicators nil)
+(defvar icomplete--not-require-indicators nil)
 
 ;;;_* Initialization
 
@@ -320,7 +332,7 @@ if that doesn't produce a completion match."
           (delete-region (1+ (point)) (point-max))))
     (call-interactively 'backward-delete-char)))
 
-(defvar icomplete-fido-mode-map
+(defvar icomplete-fido-base-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-k") 'icomplete-fido-kill)
     (define-key map (kbd "C-d") 'icomplete-fido-delete-char)
@@ -330,8 +342,6 @@ if that doesn't produce a completion match."
     (define-key map (kbd "M-j") 'icomplete-fido-exit)
     (define-key map (kbd "C-s") 'icomplete-forward-completions)
     (define-key map (kbd "C-r") 'icomplete-backward-completions)
-    (define-key map (kbd "<right>") 'icomplete-forward-completions)
-    (define-key map (kbd "<left>") 'icomplete-backward-completions)
     (define-key map (kbd "C-.") 'icomplete-forward-completions)
     (define-key map (kbd "C-,") 'icomplete-backward-completions)
     map)
@@ -340,7 +350,7 @@ if that doesn't produce a completion match."
 (defun icomplete--fido-mode-setup ()
   "Setup `fido-mode''s minibuffer."
   (when (and icomplete-mode (icomplete-simple-completing-p))
-    (use-local-map (make-composed-keymap icomplete-fido-mode-map
+    (use-local-map (make-composed-keymap icomplete-fido-base-mode-map
                                          (current-local-map)))
     (setq-local icomplete-tidy-shadowed-file-names t
                 icomplete-show-matches-on-no-input t
@@ -359,12 +369,12 @@ if that doesn't produce a completion match."
 This global minor mode makes minibuffer completion behave
 more like `ido-mode' than regular `icomplete-mode'."
   :global t :group 'icomplete
-  (remove-hook 'minibuffer-setup-hook #'icomplete-minibuffer-setup)
+  (remove-hook 'minibuffer-setup-hook #'icomplete--minibuffer-setup)
   (remove-hook 'minibuffer-setup-hook #'icomplete--fido-mode-setup)
   (when fido-mode
     (icomplete-mode -1)
     (setq icomplete-mode t)
-    (add-hook 'minibuffer-setup-hook #'icomplete-minibuffer-setup)
+    (add-hook 'minibuffer-setup-hook #'icomplete--minibuffer-setup)
     (add-hook 'minibuffer-setup-hook #'icomplete--fido-mode-setup)))
 
 ;;;_ > icomplete-mode (&optional prefix)
@@ -385,13 +395,13 @@ completions:
 
 \\{icomplete-minibuffer-map}"
   :global t :group 'icomplete
-  (remove-hook 'minibuffer-setup-hook #'icomplete-minibuffer-setup)
+  (remove-hook 'minibuffer-setup-hook #'icomplete--minibuffer-setup)
   (remove-hook 'completion-in-region-mode-hook #'icomplete--in-region-setup)
   (when icomplete-mode
     (fido-mode -1)
     (when icomplete-in-buffer
       (add-hook 'completion-in-region-mode-hook #'icomplete--in-region-setup))
-    (add-hook 'minibuffer-setup-hook #'icomplete-minibuffer-setup)))
+    (add-hook 'minibuffer-setup-hook #'icomplete--minibuffer-setup)))
 
 (defun icomplete--completion-table ()
   (if (window-minibuffer-p) minibuffer-completion-table
@@ -436,8 +446,172 @@ Conditions are:
                (eq icomplete-with-completion-tables t)
                (member table icomplete-with-completion-tables))))))
 
-;;;_ > icomplete-minibuffer-setup ()
-(defun icomplete-minibuffer-setup ()
+;; Vertical functions
+
+(defcustom icomplete-separator-vertical " \n"
+  "String used by Icomplete to separate alternatives in the minibuffer."
+  :type 'string
+  :version "28.1")
+
+(defcustom icomplete-list-indicators-vertical (cons "" "")
+  "Indicator bounds to list alternatives in the minibuffer."
+  :type 'string
+  :version "28.1")
+
+(defcustom icomplete-require-indicators-vertical (cons "" "")
+  "Indicator bounds for match in the minibuffer when require-match."
+  :type 'string
+  :version "28.1")
+
+(defcustom icomplete-not-require-indicators-vertical (cons "" "")
+  "Indicator bounds for match in the minibuffer when not require-match."
+  :type 'string
+  :version "28.1")
+
+(defvar icomplete--fido-vertical-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "<down>") 'icomplete-forward-completions)
+    (define-key map (kbd "<up>") 'icomplete-backward-completions)
+    (define-key map (kbd "C-n") 'icomplete-forward-completions)
+    (define-key map (kbd "C-p") 'icomplete-backward-completions)
+    map)
+  "Keymap used by `fido-mode' and `icomplete-mode' in `icomplete-vertical-mode'.")
+
+
+(defun icomplete--vertical-mode-setup ()
+  "Setup `icomplete-vertical-mode's minibuffer."
+  (let ((tmp (car icomplete-list-indicators-vertical)))
+  (setq-local icomplete--not-require-indicators icomplete-not-require-indicators-vertical
+              icomplete--require-indicators icomplete-require-indicators-vertical
+
+              icomplete--list-indicators (cons
+                                          (concat (unless (string-match-p "^ " tmp) " ")
+                                                  tmp
+                                                  )
+                                          (cdr icomplete-list-indicators-vertical))
+
+              icomplete--separator icomplete-separator-vertical)
+
+  (use-local-map (make-composed-keymap icomplete--fido-vertical-mode-map
+                                       (current-local-map)))))
+
+
+(defun completion--vertical (match-braket prefix most _determ comps)
+  "List of vertical completions limited."
+  (let (;; Max total rows to use, including the minibuffer content.
+        (prefix-len (and (stringp prefix)
+                         ;; Only hide the prefix if the corresponding info
+                         ;; is already displayed via `most'.
+                         (string-prefix-p prefix most t)
+                         (length prefix)))
+        (prospects-rows (+ 1   ;; prompt row
+                           (if (string-match-p "\n" (car match-braket)) 1 0)   ;; match in different line
+                           (if (string-match-p "\n" (cdr match-braket)) 1 0))) ;; new line after match
+        (prospects-max-rows (cond ((floatp max-mini-window-height)
+			           (floor (* (frame-height) max-mini-window-height)))
+			          ((integerp max-mini-window-height)
+			           max-mini-window-height)
+			          (t 1)))
+        limit prospects comp)
+    (while (and comps (not limit))
+      (setq comp (if (and icomplete-hide-common-prefix
+                          prefix-len)
+                     (substring (car comps) prefix-len)
+                   (car comps))
+            comps (cdr comps))
+
+      (setq prospects-rows (1+ prospects-rows))
+
+      (if (< prospects-rows prospects-max-rows)
+	  (push comp prospects)
+        (push icomplete-ellipsis prospects)
+	(setq limit t)))
+    (nreverse prospects)))
+
+
+;; Horizontal functions
+
+(defcustom icomplete-separator-horizontal " | "
+  "String used by Icomplete to separate alternatives in the minibuffer."
+  :type 'string
+  :version "28.1")
+
+(make-obsolete-variable 'icomplete-separator 'icomplete-separator-horizontal 28.1)
+
+(defcustom icomplete-list-indicators-horizontal (cons "{" "}")
+  "Indicator bounds to list alternatives in the minibuffer."
+  :type 'string
+  :version "28.1")
+
+(defcustom icomplete-require-indicators-horizontal (cons "(" ")")
+  "Indicator bounds for match in the minibuffer when require-match."
+  :type 'string
+  :version "28.1")
+
+(defcustom icomplete-not-require-indicators-horizontal (cons "[" "]")
+  "Indicator bounds for match in the minibuffer when not require-match."
+  :type 'string
+  :version "28.1")
+
+(defvar icomplete--fido-horizontal-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "<right>") 'icomplete-forward-completions)
+    (define-key map (kbd "<left>") 'icomplete-backward-completions)
+    (define-key map (kbd "M-n") 'icomplete-forward-completions)
+    (define-key map (kbd "M-p") 'icomplete-backward-completions)
+    map)
+  "Keymap used by `fido-mode' and `icomplete-mode' unless `icomplete-vertical-mode'.")
+
+
+(defun icomplete--horizontal-mode-setup ()
+  "Setup `icomplete-vertical-mode's minibuffer."
+  (setq-local icomplete--not-require-indicators icomplete-not-require-indicators-horizontal
+              icomplete--require-indicators icomplete-require-indicators-horizontal
+              icomplete--list-indicators icomplete-list-indicators-horizontal
+              icomplete--separator icomplete-separator-horizontal)
+
+  (use-local-map (make-composed-keymap icomplete--fido-horizontal-mode-map
+                                       (current-local-map))))
+
+
+(defun completion--horizontal (match-braket prefix most determ comps)
+  "List of horizontal completions limited."
+
+  (let* (;; Max total length to use, including the minibuffer content.
+         (prefix-len (and (stringp prefix)
+                          ;; Only hide the prefix if the corresponding info
+                          ;; is already displayed via `most'.
+                          (string-prefix-p prefix most t)
+                          (length prefix)))
+         (prospects-len (+ (string-width (or determ
+                                             (concat (car match-braket) (cdr match-braket))))
+			   (string-width icomplete--separator)
+			   (+ 2 (string-width icomplete-ellipsis)) ;; take {…} into account
+			   (string-width (buffer-string))))
+         (prospects-max-len (* (+ icomplete-prospects-height
+                                  ;; If the minibuffer content already uses up more than
+                                  ;; one line, increase the allowable space accordingly.
+                                  (/ prospects-len (window-width)))
+                               (window-width)))
+         limit prospects comp)
+
+    (while (and comps (not limit))
+      (setq comp
+	    (if prefix-len (substring (car comps) prefix-len) (car comps))
+	    comps (cdr comps))
+      (setq prospects-len
+            (+ (string-width comp)
+	       (string-width icomplete--separator)
+	       prospects-len))
+      (if (< prospects-len prospects-max-len)
+	  (push comp prospects)
+        (push icomplete-ellipsis prospects)
+	(setq limit t)))
+    (nreverse prospects)))
+
+
+;;;_ > icomplete--minibuffer-setup ()
+(defun icomplete--minibuffer-setup ()
   "Run in minibuffer on activation to establish incremental completion.
 Usually run by inclusion in `minibuffer-setup-hook'."
   (when (and icomplete-mode (icomplete-simple-completing-p))
@@ -446,7 +620,10 @@ Usually run by inclusion in `minibuffer-setup-hook'."
     					 (current-local-map)))
     (add-hook 'pre-command-hook  #'icomplete-pre-command-hook  nil t)
     (add-hook 'post-command-hook #'icomplete-post-command-hook nil t)
-    (run-hooks 'icomplete-minibuffer-setup-hook)))
+    (run-hooks 'icomplete--minibuffer-setup-hook))
+  (if icomplete-vertical
+      (icomplete--vertical-mode-setup)
+    (icomplete--horizontal-mode-setup)))
 
 (defvar icomplete--in-region-buffer nil)
 
@@ -557,7 +734,6 @@ Usually run by inclusion in `minibuffer-setup-hook'."
 
 
 
-
 ;;;_* Completion
 
 ;;;_ > icomplete-tidy ()
@@ -614,8 +790,8 @@ See `icomplete-mode' and `minibuffer-setup-hook'."
                           field-string
                           (icomplete--completion-table)
                           (icomplete--completion-predicate)
-                          (if (window-minibuffer-p)
-                              (eq minibuffer--require-match t)))))
+                          (when (window-minibuffer-p)
+                            (eq minibuffer--require-match t)))))
                  (buffer-undo-list t)
                  deactivate-mark)
             ;; Do nothing if while-no-input was aborted.
@@ -627,6 +803,7 @@ See `icomplete-mode' and `minibuffer-setup-hook'."
               (put-text-property 0 1 'cursor t text)
               (overlay-put icomplete-overlay 'after-string text))))))))
 
+
 ;;;_ > icomplete-completions (name candidates predicate require-match)
 (defun icomplete-completions (name candidates predicate require-match)
   "Identify prospective candidates for minibuffer completion.
@@ -637,12 +814,17 @@ minibuffer completion.
 Prospective completion suffixes (if any) are displayed, bracketed by
 one of (), [], or {} pairs.  The choice of brackets is as follows:
 
-  (...) - a single prospect is identified and matching is enforced,
-  [...] - a single prospect is identified but matching is optional, or
-  {...} - multiple prospects, separated by commas, are indicated, and
-          further input is required to distinguish a single one.
+  icomplete--require-match-indicators - a single prospect is
+          identified and matching is enforced,
 
-If there are multiple possibilities, `icomplete-separator' separates them.
+  icomplete--not-require-match-indicator - a single prospect is
+          identified but matching is optional, or
+
+  icomplete--list-indicators - multiple prospects, separated by
+          commas, are indicated, and further input is required to
+          distinguish a single one.
+
+If there are multiple possibilities, `icomplete--separator' separates them.
 
 The displays for unambiguous matches have ` [Matched]' appended
 \(whether complete or not), or ` [No matches]', if no eligible
@@ -666,12 +848,16 @@ matches exist."
 	 (comps (icomplete--sorted-completions))
          (last (if (consp comps) (last comps)))
          (base-size (cdr last))
-         (open-bracket (if require-match "(" "["))
-         (close-bracket (if require-match ")" "]")))
+         (match-braket (if require-match
+                           icomplete--require-indicators
+                         icomplete--not-require-indicators)))
     ;; `concat'/`mapconcat' is the slow part.
+    (unless icomplete-ellipsis
+      (setq icomplete-ellipsis (if (char-displayable-p ?…) "…" "...")))
+
     (if (not (consp comps))
 	(progn ;;(debug (format "Candidates=%S field=%S" candidates name))
-	  (format " %sNo matches%s" open-bracket close-bracket))
+	  (format " %sNo matches%s" (car match-braket) (cdr match-braket)))
       (if last (setcdr last nil))
       (let* ((most-try
               (if (and base-size (> base-size 0))
@@ -687,33 +873,20 @@ matches exist."
              ;; a prefix of most, or something else.
 	     (compare (compare-strings name nil nil
 				       most nil nil completion-ignore-case))
-	     (ellipsis (if (char-displayable-p ?…) "…" "..."))
 	     (determ (unless (or (eq t compare) (eq t most-try)
 				 (= (setq compare (1- (abs compare)))
 				    (length most)))
-		       (concat open-bracket
+		       (concat (car match-braket)
 			       (cond
 				((= compare (length name))
                                  ;; Typical case: name is a prefix.
 				 (substring most compare))
                                 ;; Don't bother truncating if it doesn't gain
                                 ;; us at least 2 columns.
-				((< compare (+ 2 (string-width ellipsis))) most)
-				(t (concat ellipsis (substring most compare))))
-			       close-bracket)))
-	     ;;"-prospects" - more than one candidate
-	     (prospects-len (+ (string-width
-				(or determ (concat open-bracket close-bracket)))
-			       (string-width icomplete-separator)
-			       (+ 2 (string-width ellipsis)) ;; take {…} into account
-			       (string-width (buffer-string))))
-             (prospects-max
-              ;; Max total length to use, including the minibuffer content.
-              (* (+ icomplete-prospects-height
-                    ;; If the minibuffer content already uses up more than
-                    ;; one line, increase the allowable space accordingly.
-                    (/ prospects-len (window-width)))
-                 (window-width)))
+				((< compare (+ 2 (string-width icomplete-ellipsis))) most)
+				(t (concat icomplete-ellipsis (substring most compare))))
+			       (cdr match-braket))))
+
              ;; Find the common prefix among `comps'.
              ;; We can't use the optimization below because its assumptions
              ;; aren't always true, e.g. when completion-cycling (bug#10850):
@@ -722,15 +895,9 @@ matches exist."
              ;;     ;; Common case.
              ;;     (length most)
              ;; Else, use try-completion.
-	     (prefix (when icomplete-hide-common-prefix
-		       (try-completion "" comps)))
-             (prefix-len
-	      (and (stringp prefix)
-                   ;; Only hide the prefix if the corresponding info
-                   ;; is already displayed via `most'.
-                   (string-prefix-p prefix most t)
-                   (length prefix))) ;;)
-	     prospects comp limit)
+	     (prefix (try-completion "" comps))
+	     prospects)
+
 	(if (or (eq most-try t) (not (consp (cdr comps))))
 	    (setq prospects nil)
 	  (when (member name comps)
@@ -751,35 +918,33 @@ matches exist."
 	    ;; To circumvent all the above problems, provide a visual
 	    ;; cue to the user via an "empty string" in the try
 	    ;; completion field.
-	    (setq determ (concat open-bracket "" close-bracket)))
+	    (setq determ (concat (car match-braket) "" (cdr match-braket))))
 	  ;; Compute prospects for display.
-	  (while (and comps (not limit))
-	    (setq comp
-		  (if prefix-len (substring (car comps) prefix-len) (car comps))
-		  comps (cdr comps))
-	    (setq prospects-len
-                  (+ (string-width comp)
-		     (string-width icomplete-separator)
-		     prospects-len))
-	    (if (< prospects-len prospects-max)
-		(push comp prospects)
-	      (setq limit t))))
-	(setq prospects (nreverse prospects))
-	;; Decorate first of the prospects.
+	  (setq prospects
+                (if icomplete-vertical
+                    (completion--vertical match-braket prefix most determ comps)
+                  (completion--horizontal match-braket prefix most determ comps))))
+
+        ;; Return the first match if the user hits enter.
+        (when icomplete-show-matches-on-no-input
+          (setq-local completion-content-when-empty (car prospects)))
+        ;; Decorate first of the prospects.
 	(when prospects
 	  (let ((first (copy-sequence (pop prospects))))
 	    (put-text-property 0 (length first)
 			       'face 'icomplete-first-match first)
-	    (push first prospects)))
+	    (push first prospects)
+
+            (put-text-property 0 (length determ)
+			       'face 'icomplete-common-match determ)))
         ;; Restore the base-size info, since completion-all-sorted-completions
         ;; is cached.
-        (if last (setcdr last base-size))
+        (when last (setcdr last base-size))
 	(if prospects
 	    (concat determ
-		    "{"
-		    (mapconcat 'identity prospects icomplete-separator)
-		    (and limit (concat icomplete-separator ellipsis))
-		    "}")
+		    (car icomplete--list-indicators)
+		    (mapconcat 'identity prospects icomplete--separator)
+		    (cdr icomplete--list-indicators))
 	  (concat determ " [Matched]"))))))
 
 ;;; Iswitchb compatibility
