@@ -2391,15 +2391,6 @@ shadow_lookup (Lisp_Object keymap, Lisp_Object key, Lisp_Object accept_default,
     return value;
 }
 
-DEFUN ("keymap--shadow-lookup", Fkeymap__shadow_lookup, Skeymap__shadow_lookup, 4, 4, 0,
-       doc: /* Like `lookup-key', but with command remapping.
-Just returns nil if the key sequence is too long.  */)
-  (Lisp_Object keymap, Lisp_Object key, Lisp_Object accept_default,
-   Lisp_Object remap)
-{
-  return shadow_lookup (keymap, key, accept_default, NILP(remap) ? false : true);
-}
-
 static Lisp_Object Vmouse_events;
 
 struct where_is_internal_data {
@@ -3352,9 +3343,6 @@ DEFUN ("describe-vector-internal", Fdescribe_vector_internal, Sdescribe_vector_i
   bool b_keymap_p = NILP (keymap_p) ? false : true;
   bool b_mention_shadow = NILP (mention_shadow) ? false : true;
 
-  /* describe_vector (XCAR (tail), */
-  /* 		 prefix, Qnil, elt_describer, partial, shadow, map, */
-  /* 		 1, mention_shadow); */
   describe_vector (vector, prefix, Qnil,
 		   b_transl ? describe_translation : describe_command,
 		   b_partial, shadow, entire_map,
@@ -3764,7 +3752,6 @@ This is used for internal purposes only.  */);
   defsubr (&Saccessible_keymaps);
   defsubr (&Skey_description);
   defsubr (&Skeymap__get_keyelt);
-  defsubr (&Skeymap__shadow_lookup);
   defsubr (&Sdescribe_vector);
   defsubr (&Sdescribe_vector_internal);
   defsubr (&Ssingle_key_description);

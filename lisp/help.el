@@ -1210,11 +1210,11 @@ Any inserted text ends in two newlines (used by
 Return nil if the key sequence is too long."
   ;; Converted from shadow_lookup in keymap.c.
   (let ((value (lookup-key keymap key accept-default)))
-    (when (and (fixnump value) (> 0 value))
-      (if (and value remap (symbolp value))
-          (or (command-remapping value nil keymap)
-              value)
-        value))))
+    (cond ((and (fixnump value) (<= 0 value)))
+          ((and value remap (symbolp value))
+           (or (command-remapping value nil keymap)
+               value))
+          (t value))))
 
 (defvar help--previous-description-column)
 (defun help--describe-command (definition)
@@ -1296,7 +1296,7 @@ PARTIAL, SHADOW, NOMENU are as in `describe_map_tree'."
                     ;; visible because a local definition of the
                     ;; same key shadows it.
                     (or (not shadow)
-                        (let ((tem (keymap--shadow-lookup shadow (vector event) t 0)))
+                        (let ((tem (help--shadow-lookup shadow (vector event) t nil)))
                           (cond ((null tem) t)
                                 ;; If both bindings are keymaps,
                                 ;; this key is a prefix key, so
