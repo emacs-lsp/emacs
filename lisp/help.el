@@ -1283,8 +1283,8 @@ PARTIAL, SHADOW, NOMENU are as in `describe_map_tree'."
              (let ((event (caar tail))
                    definition this-shadowed)
                ;; Ignore bindings whose "prefix" are not really
-	       ;; valid events. (We get these in the frames and
-	       ;; buffers menu.)
+               ;; valid events. (We get these in the frames and
+               ;; buffers menu.)
                (and (or (symbolp event) (fixnump event))
                     (not (and nomenu (eq event 'menu-bar)))
                     ;; Don't show undefined commands or suppressed
@@ -1299,19 +1299,19 @@ PARTIAL, SHADOW, NOMENU are as in `describe_map_tree'."
                         (let ((tem (keymap--shadow-lookup shadow (vector event) t 0)))
                           (cond ((null tem) t)
                                 ;; If both bindings are keymaps,
-		                ;; this key is a prefix key, so
-		                ;; don't say it is shadowed.
+                                ;; this key is a prefix key, so
+                                ;; don't say it is shadowed.
                                 ((and (keymapp definition) (keymapp tem)) t)
                                 ;; Avoid generating duplicate
-		                ;; entries if the shadowed binding
-		                ;; has the same definition.
+                                ;; entries if the shadowed binding
+                                ;; has the same definition.
                                 ((setq this-shadowed t))
                                 (t nil))))
                     (push (list event definition this-shadowed) vect))))
             ((eq (car tail) 'keymap)
              ;; The same keymap might be in the structure twice, if
-	     ;; we're using an inherited keymap.  So skip anything
-	     ;; we've already encountered.
+             ;; we're using an inherited keymap.  So skip anything
+             ;; we've already encountered.
              (let ((tem (assq tail internal--seen)))
                (if (and (consp tem)
                         (equal (car tem) prefix))
@@ -1351,14 +1351,14 @@ PARTIAL, SHADOW, NOMENU are as in `describe_map_tree'."
           (when (not (eq start end))
             (insert " .. " (key-description (vector end) prefix)))
           ;; Print a description of the definition of this character.
-	  ;; Called function will take care of spacing out far enough
-	  ;; for alignment purposes.
+          ;; Called function will take care of spacing out far enough
+          ;; for alignment purposes.
           (if transl
               (help--describe-translation definition)
             (help--describe-command definition))
           ;; Print a description of the definition of this character.
-	  ;; elt_describer will take care of spacing out far enough for
-	  ;; alignment purposes.
+          ;; elt_describer will take care of spacing out far enough for
+          ;; alignment purposes.
           (when shadowed
             (goto-char (max (1- (point)) (point-min)))
             (insert "\n  (that binding is currently shadowed by another mode)")
