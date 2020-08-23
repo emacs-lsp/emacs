@@ -1264,11 +1264,12 @@ Return nil if the key sequence is too long."
           (t nil))))
 
 (defun describe-map (map prefix transl partial shadow nomenu mention-shadow)
-  "Describe the contents of map MAP.
-Assume that this map itself is reached by the sequence of prefix
-keys PREFIX (a string or vector).
+  "Describe the contents of keymap MAP.
+Assume that this keymap itself is reached by the sequence of
+prefix keys PREFIX (a string or vector).
 
-PARTIAL, SHADOW, NOMENU are as in `describe_map_tree'."
+TRANSL, PARTIAL, SHADOW, NOMENU, MENTION-SHADOW are as in
+`describe-map-tree'."
   ;; Converted from describe_map in keymap.c.
   (let* ((suppress (and partial 'suppress-keymap))
          (map (keymap-canonicalize map))
@@ -1305,7 +1306,8 @@ PARTIAL, SHADOW, NOMENU are as in `describe_map_tree'."
                                 ;; Avoid generating duplicate
                                 ;; entries if the shadowed binding
                                 ;; has the same definition.
-                                ((setq this-shadowed t))
+                                ((and mention-shadow (not (eq tem definition)))
+                                 (setq this-shadowed t))
                                 (t nil))))
                     (push (list event definition this-shadowed) vect))))
             ((eq (car tail) 'keymap)

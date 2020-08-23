@@ -277,6 +277,98 @@ key             binding
 
 ")))))
 
+(ert-deftest help-tests-describe-map-tree/no-menu-t ()
+  (with-temp-buffer
+    (let ((standard-output (current-buffer))
+          (map '(keymap . ((1 . foo)
+                           (menu-bar keymap
+                                     (foo menu-item "Foo" foo
+                                          :enable mark-active
+                                          :help "Help text"))))))
+      (describe-map-tree map nil nil nil nil t nil nil nil)
+      (should (equal (buffer-string) "key             binding
+---             -------
+
+C-a		foo
+
+")))))
+
+(ert-deftest help-tests-describe-map-tree/no-menu-nil ()
+  (with-temp-buffer
+    (let ((standard-output (current-buffer))
+          (map '(keymap . ((1 . foo)
+                           (menu-bar keymap
+                                     (foo menu-item "Foo" foo
+                                          :enable mark-active
+                                          :help "Help text"))))))
+      (describe-map-tree map nil nil nil nil nil nil nil nil)
+      (should (equal (buffer-string) "key             binding
+---             -------
+
+C-a		foo
+<menu-bar>	Prefix Command
+
+<menu-bar> <foo>		foo
+
+")))))
+
+(ert-deftest help-tests-describe-map-tree/mention-shadow-t ()
+  (with-temp-buffer
+    (let ((standard-output (current-buffer))
+          (map '(keymap . ((1 . foo)
+                           (2 . bar))))
+          (shadow-maps '((keymap . ((1 . baz))))))
+      (describe-map-tree map t shadow-maps nil nil t nil nil t)
+      (should (equal (buffer-string) "key             binding
+---             -------
+
+C-a		foo
+  (that binding is currently shadowed by another mode)
+C-b		bar
+
+")))))
+
+(ert-deftest help-tests-describe-map-tree/mention-shadow-nil ()
+  (with-temp-buffer
+    (let ((standard-output (current-buffer))
+          (map '(keymap . ((1 . foo)
+                           (2 . bar))))
+          (shadow-maps '((keymap . ((1 . baz))))))
+      (describe-map-tree map t shadow-maps nil nil t nil nil nil)
+      (should (equal (buffer-string) "key             binding
+---             -------
+
+C-b		bar
+
+")))))
+
+(ert-deftest help-tests-describe-map-tree/partial-t ()
+  (with-temp-buffer
+    (let ((standard-output (current-buffer))
+          (map '(keymap . ((1 . foo)
+                           (2 . undefined)))))
+      (describe-map-tree map t nil nil nil nil nil nil nil)
+      (should (equal (buffer-string) "key             binding
+---             -------
+
+C-a		foo
+
+")))))
+
+(ert-deftest help-tests-describe-map-tree/partial-nil ()
+  (with-temp-buffer
+    (let ((standard-output (current-buffer))
+          (map '(keymap . ((1 . foo)
+                           (2 . undefined)))))
+      (describe-map-tree map nil nil nil nil nil nil nil nil)
+      (should (equal (buffer-string) "key             binding
+---             -------
+
+C-a		foo
+C-b		undefined
+
+")))))
+
 ;; TODO: This is a temporary test that should be removed together with
 ;; substitute-command-keys-old.
 (ert-deftest help-tests-substitute-command-keys/compare ()
