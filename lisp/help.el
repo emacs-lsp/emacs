@@ -147,12 +147,12 @@ Do not call this in the scope of `with-help-window'."
 		      pop-up-frames
 		      (special-display-p (buffer-name standard-output)))
 		     (setq help-return-method (cons (selected-window) t))
-		     ;; If the help output buffer is a special display buffer,
-		     ;; don't say anything about how to get rid of it.
-		     ;; First of all, the user will do that with the window
-		     ;; manager, not with Emacs.
-		     ;; Secondly, the buffer has not been displayed yet,
-		     ;; so we don't know whether its frame will be selected.
+                     ;; If the help output buffer is a special display buffer,
+                     ;; don't say anything about how to get rid of it.  First of
+                     ;; all, the user will do that with the window manager, not
+                     ;; with Emacs.  Secondly, the buffer has not been displayed
+                     ;; yet, so we don't know whether its frame will be
+                     ;; selected.
 		     nil)
 		    ((not (one-window-p t))
 		     (setq help-return-method
@@ -1028,8 +1028,8 @@ Otherwise, return a new string."
                ((and (= (+ (point) 1) (point-max))
                      (= (following-char) ?=))
                 (forward-char 1))
-               ;; 1B. \= quotes the next character;
-	       ;;     thus, to put in \[ without its special meaning, use \=\[.
+               ;; 1B. \= quotes the next character; thus, to put in \[
+               ;;     without its special meaning, use \=\[.
                ((= (following-char) ?=)
                 (goto-char orig-point)
                 (delete-char 2)
@@ -1061,7 +1061,8 @@ Otherwise, return a new string."
                     ;; Function is on a key.
                     (delete-char (- end-point (point)))
                     (insert (key-description key)))))
-               ;; 1D. \{foo} is replaced with a summary of the keymap (symbol-value foo).
+               ;; 1D. \{foo} is replaced with a summary of the keymap
+               ;;            (symbol-value foo).
                ;;     \<foo> just sets the keymap used for \[cmd].
                ((and (or (and (= (following-char) ?{)
                               (setq close "}")
@@ -1077,10 +1078,11 @@ Otherwise, return a new string."
                        this-keymap)
                   (delete-char (- end-point (point)))
                   ;; Get the value of the keymap in TEM, or nil if
-	          ;; undefined. Do this in the user's current buffer in
-	          ;; case it is a local variable.
+                  ;; undefined. Do this in the user's current buffer
+                  ;; in case it is a local variable.
                   (with-current-buffer orig-buf
-                    ;; This is for computing the SHADOWS arg for describe_map_tree.
+                    ;; This is for computing the SHADOWS arg for
+                    ;; describe_map_tree.
                     (setq active-maps (current-active-maps))
                     (when (boundp name)
                       (setq this-keymap (and (keymapp (symbol-value name))
@@ -1097,8 +1099,8 @@ Otherwise, return a new string."
                    ((not generate-summary)
                     (setq keymap this-keymap))
                    (t
-	            ;; Get the list of active keymaps that precede this one.
-	            ;; If this one's not active, get nil.
+                    ;; Get the list of active keymaps that precede this one.
+                    ;; If this one's not active, get nil.
                     (let ((earlier-maps (cdr (memq this-keymap (reverse active-maps)))))
                       (describe-map-tree this-keymap t (nreverse earlier-maps)
                                          nil nil t nil nil t))))))))
@@ -1115,8 +1117,6 @@ Otherwise, return a new string."
               (delete-char 1))
              ;; 3. Nothing to do -- next character.
              (t (forward-char 1)))))
-        ;; FIXME: Maybe just return string if nothing substituted?
-        ;; (if (string= string (buffer-string)) string (buffer-string))
         (buffer-string)))))
 
 (defvar internal--seen)
