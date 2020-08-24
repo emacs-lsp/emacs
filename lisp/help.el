@@ -1082,7 +1082,7 @@ Otherwise, return a new string."
                   ;; in case it is a local variable.
                   (with-current-buffer orig-buf
                     ;; This is for computing the SHADOWS arg for
-                    ;; describe_map_tree.
+                    ;; describe-map-tree.
                     (setq active-maps (current-active-maps))
                     (when (boundp name)
                       (setq this-keymap (and (keymapp (symbol-value name))
@@ -1278,8 +1278,8 @@ TRANSL, PARTIAL, SHADOW, NOMENU, MENTION-SHADOW are as in
          done vect)
     (while (and (consp tail) (not done))
       (cond ((or (vectorp (car tail)) (char-table-p (car tail)))
-             (help--describe-keymap (car tail) prefix transl partial
-                                shadow map mention-shadow))
+             (describe-keymap-or-char-table (car tail) prefix transl partial
+                                            shadow map mention-shadow))
             ((consp (car tail))
              (let ((event (caar tail))
                    definition this-shadowed)
@@ -1343,7 +1343,7 @@ TRANSL, PARTIAL, SHADOW, NOMENU, MENTION-SHADOW are as in
                               (next-definition (cadar (cdr vect)))
                               (next-shadowed (caddar (cdr vect))))
                           (and (eq next-event (1+ this-event))
-                               (not (null (equal next-definition this-definition)))
+                               (equal next-definition this-definition)
                                (eq this-shadowed next-shadowed))))
               (setq vect (cdr vect))
               (setq end (caar vect))))
@@ -1368,74 +1368,77 @@ TRANSL, PARTIAL, SHADOW, NOMENU, MENTION-SHADOW are as in
         ;; Next item in list.
         (setq vect (cdr vect))))))
 
-(defun help--describe-keymap
-    (keymap prefix transl partial shadow entire-map mention-shadow)
-  "Insert in the current buffer a description of the contents of KEYMAP.
-
-PREFIX is a string describing the key which leads to this keymap.
-
-If PARTIAL, it means do not mention suppressed commands.
-
-SHADOW is a list of keymaps that shadow this map.  If it is
-non-nil, look up the key in those maps and don't mention it if it
-is defined by any of them.
-
-ENTIRE-MAP is the keymap in which this keymap appears.
-If the definition in effect in the whole map does not match
-the one in this keymap, we ignore this one."
-  ;; Converted from describe_vector in keymap.c.
-  (let* ((first t)
-         (idx 0))
-    (while (< idx (length keymap))
-      (let* ((val (aref keymap idx))
-             (definition (keymap--get-keyelt val nil))
-             (start-idx idx)
-             this-shadowed
-             found-range)
-        (when (and definition
-                   ;; Don't mention suppressed commands.
-                   (not (and partial
-                             (symbolp definition)
-                             (get definition 'suppress-keymap)))
-                   ;; If this binding is shadowed by some other map,
-                   ;; ignore it.
-                   (not (and shadow
-                             (help--shadow-lookup shadow (vector start-idx) t nil)
-                             (if mention-shadow
-                                 (prog1 nil (setq this-shadowed t))
-                               t)))
-                   ;; Ignore this definition if it is shadowed by an earlier
-                   ;; one in the same keymap.
-                   (not (and entire-map
-                             (not (eq (lookup-key entire-map (vector start-idx) t)
-                                      definition)))))
-          (when first
-            (insert "\n")
-            (setq first nil))
-          (when (and prefix (> (length prefix) 0))
-            (insert (format "%s" prefix)))
-          (insert (key-description (vector start-idx) prefix))
-          ;; Find all consecutive characters or rows that have the
-          ;; same definition.
-          (while (equal (keymap--get-keyelt (aref keymap (1+ idx)) nil)
-                        definition)
-            (setq found-range t)
-            (setq idx (1+ idx)))
-          ;; If we have a range of more than one character,
-          ;; print where the range reaches to.
-          (when found-range
-            (insert " .. ")
-            (when (and prefix (> (length prefix) 0))
-              (insert (format "%s" prefix)))
-            (insert (key-description (vector idx) prefix)))
-          (if transl
-              (help--describe-translation definition)
-            (help--describe-command definition))
-          (when this-shadowed
-            (goto-char (1- (point)))
-            (insert "  (binding currently shadowed)")
-            (goto-char (1+ (point))))))
-      (setq idx (1+ idx)))))
+;;; The Lisp version is 100 times slower than the C equivalent:
+;;
+;; (defun describe-keymap-or-char-table
+;;     (keymap prefix transl partial shadow entire-map mention-shadow)
+;;   "Insert in the current buffer a description of the contents of KEYMAP.
+;;
+;; PREFIX is a string describing the key which leads to this keymap.
+;;
+;; If PARTIAL, it means do not mention suppressed commands.
+;;
+;; SHADOW is a list of keymaps that shadow this map.  If it is
+;; non-nil, look up the key in those maps and don't mention it if it
+;; is defined by any of them.
+;;
+;; ENTIRE-MAP is the keymap in which this keymap appears.
+;; If the definition in effect in the whole map does not match
+;; the one in this keymap, we ignore this one."
+;;   ;; Converted from describe_vector in keymap.c.
+;;   (let* ((first t)
+;;          (idx 0)
+;;          (len (length keymap)))
+;;     (while (< idx len)
+;;       (let* ((val (aref keymap idx))
+;;              (definition (keymap--get-keyelt val nil))
+;;              (start-idx idx)
+;;              this-shadowed
+;;              found-range)
+;;         (when (and definition
+;;                    ;; Don't mention suppressed commands.
+;;                    (not (and partial
+;;                              (symbolp definition)
+;;                              (get definition 'suppress-keymap)))
+;;                    ;; If this binding is shadowed by some other map,
+;;                    ;; ignore it.
+;;                    (not (and shadow
+;;                              (help--shadow-lookup shadow (vector start-idx) t nil)
+;;                              (if mention-shadow
+;;                                  (prog1 nil (setq this-shadowed t))
+;;                                t)))
+;;                    ;; Ignore this definition if it is shadowed by an earlier
+;;                    ;; one in the same keymap.
+;;                    (not (and entire-map
+;;                              (not (eq (lookup-key entire-map (vector start-idx) t)
+;;                                       definition)))))
+;;           (when first
+;;             (insert "\n")
+;;             (setq first nil))
+;;           (when (and prefix (> (length prefix) 0))
+;;             (insert (format "%s" prefix)))
+;;           (insert (key-description (vector start-idx) prefix))
+;;           ;; Find all consecutive characters or rows that have the
+;;           ;; same definition.
+;;           (while (equal (keymap--get-keyelt (aref keymap (1+ idx)) nil)
+;;                         definition)
+;;             (setq found-range t)
+;;             (setq idx (1+ idx)))
+;;           ;; If we have a range of more than one character,
+;;           ;; print where the range reaches to.
+;;           (when found-range
+;;             (insert " .. ")
+;;             (when (and prefix (> (length prefix) 0))
+;;               (insert (format "%s" prefix)))
+;;             (insert (key-description (vector idx) prefix)))
+;;           (if transl
+;;               (help--describe-translation definition)
+;;             (help--describe-command definition))
+;;           (when this-shadowed
+;;             (goto-char (1- (point)))
+;;             (insert "  (binding currently shadowed)")
+;;             (goto-char (1+ (point))))))
+;;       (setq idx (1+ idx)))))
 
 
 (declare-function x-display-pixel-height "xfns.c" (&optional terminal))
