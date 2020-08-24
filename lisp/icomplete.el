@@ -332,7 +332,7 @@ if that doesn't produce a completion match."
           (delete-region (1+ (point)) (point-max))))
     (call-interactively 'backward-delete-char)))
 
-(defvar icomplete-fido-base-mode-map
+(defvar icomplete-fido-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-k") 'icomplete-fido-kill)
     (define-key map (kbd "C-d") 'icomplete-fido-delete-char)
@@ -350,7 +350,7 @@ if that doesn't produce a completion match."
 (defun icomplete--fido-mode-setup ()
   "Setup `fido-mode''s minibuffer."
   (when (and icomplete-mode (icomplete-simple-completing-p))
-    (use-local-map (make-composed-keymap icomplete-fido-base-mode-map
+    (use-local-map (make-composed-keymap icomplete-fido-mode-map
                                          (current-local-map)))
     (setq-local icomplete-tidy-shadowed-file-names t
                 icomplete-show-matches-on-no-input t
@@ -468,7 +468,7 @@ Conditions are:
   :type 'string
   :version "28.1")
 
-(defvar icomplete--fido-vertical-mode-map
+(defvar icomplete--vertical-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "<down>") 'icomplete-forward-completions)
     (define-key map (kbd "<up>") 'icomplete-backward-completions)
@@ -492,7 +492,7 @@ Conditions are:
 
               icomplete--separator icomplete-separator-vertical)
 
-  (use-local-map (make-composed-keymap icomplete--fido-vertical-mode-map
+  (use-local-map (make-composed-keymap icomplete--vertical-mode-map
                                        (current-local-map)))))
 
 
@@ -553,7 +553,7 @@ Conditions are:
   :type 'string
   :version "28.1")
 
-(defvar icomplete--fido-horizontal-mode-map
+(defvar icomplete--horizontal-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "<right>") 'icomplete-forward-completions)
     (define-key map (kbd "<left>") 'icomplete-backward-completions)
@@ -570,7 +570,7 @@ Conditions are:
               icomplete--list-indicators icomplete-list-indicators-horizontal
               icomplete--separator icomplete-separator-horizontal)
 
-  (use-local-map (make-composed-keymap icomplete--fido-horizontal-mode-map
+  (use-local-map (make-composed-keymap icomplete--horizontal-mode-map
                                        (current-local-map))))
 
 
