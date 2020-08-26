@@ -996,6 +996,18 @@ based on the current window size.  In previous versions of Emacs, this
 was always done (and that could lead to odd displays when resizing the
 window after starting).  This variable defaults to nil.
 
+** Completions
+
+---
+*** New option 'minibuffer-tab-through-completions-function'
+This contains the function to call when completions are shown and
+the *Completions* is already visible already.  The variable contains
+the default value 'minibuffer-tab-through-completions-default'.
+
+---
+*** New hook 'minibuffer-hide-completions-hook'
+New hook executed when hiding the *Completions* buffer.
+
 ** Miscellaneous
 
 +++
