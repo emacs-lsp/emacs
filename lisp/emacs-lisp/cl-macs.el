@@ -2374,10 +2374,13 @@ values.  For compatibility, (cl-values A B C) is a synonym for (list A B C).
 			    '((0 nil) (1 t) (2 t) (3 t))))
 	       (safety (assq (nth 1 (assq 'safety (cdr spec)))
 			     '((0 t) (1 t) (2 t) (3 nil)))))
-	   (if speed (setq cl--optimize-speed (car speed)
-			   byte-optimize (nth 1 speed)))
-	   (if safety (setq cl--optimize-safety (car safety)
-			    byte-compile-delete-errors (nth 1 safety)))))
+	   (when speed
+             (setq cl--optimize-speed (car speed)
+		   byte-optimize (nth 1 speed))
+             (function-put defun-last-function-name 'speed cl--optimize-speed))
+	   (when safety
+             (setq cl--optimize-safety (car safety)
+		   byte-compile-delete-errors (nth 1 safety)))))
 
 	((and (eq (car-safe spec) 'warn) (boundp 'byte-compile-warnings))
 	 (while (setq spec (cdr spec))

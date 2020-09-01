@@ -258,6 +258,9 @@ The return value is undefined.
 	       (cons 'prog1 (cons def declarations))
 	     def))))))
 
+(defvar defun-last-function-name nil
+  "Last function name macroexpanded by `defun'.")
+
 ;; Now that we defined defmacro we can use it!
 (defmacro defun (name arglist &optional docstring &rest body)
   "Define NAME as a function.
@@ -280,6 +283,7 @@ The return value is undefined.
        (and (listp arglist)
             (null (delq t (mapcar #'symbolp arglist)))))
       (error "Malformed arglist: %s" arglist))
+  (setq defun-last-function-name name)
   (let ((decls (cond
                 ((eq (car-safe docstring) 'declare)
                  (prog1 (cdr docstring) (setq docstring nil)))
