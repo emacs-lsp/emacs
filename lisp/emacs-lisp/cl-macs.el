@@ -2332,7 +2332,13 @@ values.  For compatibility, (cl-values A B C) is a synonym for (list A B C).
   (if (not (or (not (cl--compiling-file))
                (< cl--optimize-speed 3)
                (= cl--optimize-safety 3)))
-      form
+      (if (and (boundp 'byte-native-compiling)
+               byte-native-compiling)
+          (cl-case type
+            (fixnum `(comp-hint-fixnum ,form))
+            (cons `(comp-hint-cons ,form))
+            (otherwise form))
+          form)
     (macroexp-let2 macroexp-copyable-p temp form
       `(progn (unless (cl-typep ,temp ',type)
                 (signal 'wrong-type-argument
