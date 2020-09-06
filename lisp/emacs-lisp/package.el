@@ -443,6 +443,14 @@ synchronously."
   :version "28.1")
 
 
+;;; Errors
+
+(define-error 'package-error "Unknown package error")
+(define-error 'bad-size "Package size mismatch" 'package-error)
+(define-error 'bad-signature "Failed to verify signature" 'package-error)
+(define-error 'bad-checksum "Failed to verify checksum" 'package-error)
+
+
 ;;; `package-desc' object definition
 ;; This is the struct used internally to represent packages.
 ;; Functions that deal with packages should generally take this object
@@ -1377,8 +1385,6 @@ errors signaled by ERROR-FORM or by BODY).
                    url))
           (insert-file-contents-literally url)))))
 
-(define-error 'bad-checksum "Failed to verify checksum")
-
 (defun package--show-verify-checksum-error (pkg-desc details)
   "Show error on failed checksum verification of PKG-DESC with DETAILS.
 Error is displayed in a new buffer named \"*Error*\"."
@@ -1449,8 +1455,6 @@ Signal an error of type `bad-checksum' if the verification."
       (_ (user-error "Value of `package-verify-checksums' is invalid: `%s'"
                      package-verify-checksums)))))
 
-(define-error 'bad-size "Package size mismatch")
-
 (defun package--verify-package-size (pkg-desc)
   "Verify package size of `package-desc' object PKG-DESC.
 This assumes that the we are in a buffer containing package."
@@ -1463,8 +1467,6 @@ This assumes that the we are in a buffer containing package."
                           (package-desc-name pkg-desc)))
           (insert (format "Expected %s bytes, but received %s" expected actual))))
       (signal 'bad-size (list "size mismatch" expected actual)))))
-
-(define-error 'bad-signature "Failed to verify signature")
 
 (defun package--check-signature-content (content string &optional sig-file)
   "Check signature CONTENT against STRING.
