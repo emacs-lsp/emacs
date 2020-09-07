@@ -57,11 +57,6 @@
   :link '(info-link "(emacs)Icomplete")
   :group 'minibuffer)
 
-(defcustom icomplete-vertical nil
-  "Enable `icomplete' vertical mode."
-  :type 'bool
-  :version "28.1")
-
 (defcustom icomplete-hide-common-prefix t
   "When non-nil, hide common prefix from completion candidates.
 When nil, show candidates in full."
@@ -146,10 +141,32 @@ icompletion is occurring."
   :type 'hook
   :group 'icomplete)
 
-(defvar icomplete--separator nil)
-(defvar icomplete--list-indicators nil)
-(defvar icomplete--require-indicators nil)
-(defvar icomplete--not-require-indicators nil)
+(defcustom icomplete-format 'horizontal
+  "Enable `icomplete' vertical mode."
+  :type '(choice (const horizontal)
+                 (const vertical))
+  :version "28.1")
+
+(defvar icomplete--separator nil
+  "If there are multiple possibilities this separates them.")
+
+(defvar icomplete--list-indicators nil
+  "Indicator for when multiple prospects are available.
+means that further input is required to distinguish a single one")
+
+(defvar icomplete--require-indicators nil
+  "Indicator for when matching is enforced.
+This is used when a single prospect is identified and is
+initialized in icomplete--minibuffer-setup")
+
+(defvar icomplete--not-require-indicators nil
+  "Indicator for when matching is optional.
+This is used when a single prospect is identified and is
+initialized in icomplete--minibuffer-setup")
+
+(defvar icomplete--map nil)
+(defvar icomplete--last-format nil)
+(defvar icomplete--prospects nil)
 
 ;;;_* Initialization
 
@@ -478,28 +495,10 @@ Conditions are:
   "Keymap used by `fido-mode' and `icomplete-mode' in `icomplete-vertical-mode'.")
 
 
-(defun icomplete--vertical-mode-setup ()
-  "Setup `icomplete-vertical-mode's minibuffer."
-  (let ((tmp (car icomplete-list-indicators-vertical)))
-  (setq-local icomplete--not-require-indicators icomplete-not-require-indicators-vertical
-              icomplete--require-indicators icomplete-require-indicators-vertical
-
-              icomplete--list-indicators (cons
-                                          (concat (unless (string-match-p "^ " tmp) " ")
-                                                  tmp
-                                                  )
-                                          (cdr icomplete-list-indicators-vertical))
-
-              icomplete--separator icomplete-separator-vertical)
-
-  (use-local-map (make-composed-keymap icomplete--vertical-mode-map
-                                       (current-local-map)))))
-
-
-(defun completion--vertical (match-braket prefix most _determ comps)
+(defun icomplete--vertical-prospects (match-braket prefix most _determ comps)
   "List of vertical completions limited."
-  (let (;; Max total rows to use, including the minibuffer content.
-        (prefix-len (and (stringp prefix)
+  ;; Max total rows to use, including the minibuffer content.
+  (let ((prefix-len (and (stringp prefix)
                          ;; Only hide the prefix if the corresponding info
                          ;; is already displayed via `most'.
                          (string-prefix-p prefix most t)
@@ -528,6 +527,16 @@ Conditions are:
 	(setq limit t)))
     (nreverse prospects)))
 
+
+(defun icomplete--vertical-mode-setup ()
+  "Setup `icomplete-vertical-mode's minibuffer."
+  (setq-local icomplete--not-require-indicators icomplete-not-require-indicators-vertical
+              icomplete--require-indicators icomplete-require-indicators-vertical
+              icomplete--list-indicators icomplete-list-indicators-vertical
+              icomplete--separator icomplete-separator-vertical
+              icomplete--map (make-composed-keymap icomplete--vertical-mode-map
+                                                   (current-local-map))
+              icomplete--prospects 'icomplete--vertical-prospects))
 
 ;; Horizontal functions
 
@@ -563,18 +572,7 @@ Conditions are:
   "Keymap used by `fido-mode' and `icomplete-mode' unless `icomplete-vertical-mode'.")
 
 
-(defun icomplete--horizontal-mode-setup ()
-  "Setup `icomplete-vertical-mode's minibuffer."
-  (setq-local icomplete--not-require-indicators icomplete-not-require-indicators-horizontal
-              icomplete--require-indicators icomplete-require-indicators-horizontal
-              icomplete--list-indicators icomplete-list-indicators-horizontal
-              icomplete--separator icomplete-separator-horizontal)
-
-  (use-local-map (make-composed-keymap icomplete--horizontal-mode-map
-                                       (current-local-map))))
-
-
-(defun completion--horizontal (match-braket prefix most determ comps)
+(defun icomplete--horizontal-prospects (match-braket prefix most determ comps)
   "List of horizontal completions limited."
 
   (let* (;; Max total length to use, including the minibuffer content.
@@ -609,6 +607,16 @@ Conditions are:
 	(setq limit t)))
     (nreverse prospects)))
 
+(defun icomplete--horizontal-mode-setup ()
+  "Setup `icomplete-horizontal-mode's minibuffer."
+  (setq-local icomplete--not-require-indicators icomplete-not-require-indicators-horizontal
+              icomplete--require-indicators icomplete-require-indicators-horizontal
+              icomplete--list-indicators icomplete-list-indicators-horizontal
+              icomplete--separator icomplete-separator-horizontal
+              icomplete--map (make-composed-keymap icomplete--horizontal-mode-map
+                                                   (current-local-map))
+              icomplete--prospects 'icomplete--horizontal-prospects))
+
 
 ;;;_ > icomplete--minibuffer-setup ()
 (defun icomplete--minibuffer-setup ()
@@ -621,9 +629,18 @@ Usually run by inclusion in `minibuffer-setup-hook'."
     (add-hook 'pre-command-hook  #'icomplete-pre-command-hook  nil t)
     (add-hook 'post-command-hook #'icomplete-post-command-hook nil t)
     (run-hooks 'icomplete--minibuffer-setup-hook))
-  (if icomplete-vertical
-      (icomplete--vertical-mode-setup)
-    (icomplete--horizontal-mode-setup)))
+
+  (cond
+   ((eq icomplete-format icomplete--last-format)
+    ;; Early exit if icomplete-format is the same keep this condition
+    ;; as the first one always.
+    (setq icomplete--last-format icomplete-format))
+   ((eq icomplete-format 'vertical)
+    (icomplete--vertical-mode-setup))
+   ((eq icomplete-format 'horizontal)
+    (icomplete--horizontal-mode-setup))
+   (t
+    (message "Invalid icomplete-format: %s" icomplete-format))))
 
 (defvar icomplete--in-region-buffer nil)
 
@@ -809,26 +826,7 @@ See `icomplete-mode' and `minibuffer-setup-hook'."
   "Identify prospective candidates for minibuffer completion.
 
 The display is updated with each minibuffer keystroke during
-minibuffer completion.
-
-Prospective completion suffixes (if any) are displayed, bracketed by
-one of (), [], or {} pairs.  The choice of brackets is as follows:
-
-  icomplete--require-match-indicators - a single prospect is
-          identified and matching is enforced,
-
-  icomplete--not-require-match-indicator - a single prospect is
-          identified but matching is optional, or
-
-  icomplete--list-indicators - multiple prospects, separated by
-          commas, are indicated, and further input is required to
-          distinguish a single one.
-
-If there are multiple possibilities, `icomplete--separator' separates them.
-
-The displays for unambiguous matches have ` [Matched]' appended
-\(whether complete or not), or ` [No matches]', if no eligible
-matches exist."
+minibuffer completion."
   (let* ((ignored-extension-re
           (and minibuffer-completing-file-name
                icomplete-with-completion-tables
@@ -898,7 +896,8 @@ matches exist."
 	     (prefix (try-completion "" comps))
 	     prospects)
 
-	(if (or (eq most-try t) (not (consp (cdr comps))))
+	(if (or (eq most-try t)
+                (not (consp (cdr comps))))
 	    (setq prospects nil)
 	  (when (member name comps)
 	    ;; NAME is complete but not unique.  This scenario poses
@@ -921,9 +920,7 @@ matches exist."
 	    (setq determ (concat (car match-braket) "" (cdr match-braket))))
 	  ;; Compute prospects for display.
 	  (setq prospects
-                (if icomplete-vertical
-                    (completion--vertical match-braket prefix most determ comps)
-                  (completion--horizontal match-braket prefix most determ comps))))
+                (funcall icomplete--prospects match-braket prefix most determ comps)))
 
         ;; Return the first match if the user hits enter.
         (when icomplete-show-matches-on-no-input
