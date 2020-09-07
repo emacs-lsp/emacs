@@ -854,6 +854,61 @@ If the rest succeed, just ignore the unsupported one."
       (insert "7")
       (should-error (package--verify-package-size pkg-desc)))))
 
+(ert-deftest package-tests--parse-timestamp-from-buffer ()
+  (with-temp-buffer
+    (insert ";; Last-Updated: 2020-05-01T15:43:35.000Z\n(foo bar baz)")
+    (should (equal (package--parse-timestamp-from-buffer "foo")
+                   '(24236 17319)))))
+
+(defun package-tests-parse-timestamp (text)
+  (with-temp-buffer
+     (insert text)
+     (package--parse-timestamp-from-buffer "foo")))
+
+(ert-deftest package-test-verify-package-timestamp ()
+  (let ((a (package-tests-parse-timestamp
+            ";; Last-Updated: 2020-05-01T15:43:35.000Z\n"))
+        (b (package-tests-parse-timestamp
+            ";; Last-Updated: 2020-06-01T15:43:35.000Z\n"))
+        (c (package-tests-parse-timestamp
+            ";; Last-Updated: 2020-07-01T15:43:35.000Z\n")))
+    ;; Return nil on success.
+    (should-not (package--compare-archive-timestamps nil b "foo"))
+    (should-not (package--compare-archive-timestamps a b "foo"))
+    (should-not (package--compare-archive-timestamps a c "foo"))
+    (should-not (package--compare-archive-timestamps b c "foo"))
+    ;; Signal error.
+    (should-error (package--compare-archive-timestamps b a "foo"))
+    (should-error (package--compare-archive-timestamps c a "foo"))
+    (should-error (package--compare-archive-timestamps c b "foo"))
+    (should-error (package--compare-archive-timestamps a nil "foo"))))
+
+(ert-deftest package-test-verify-package-timestamp ()
+  (let ((a (package-tests-parse-timestamp
+            ";; Last-Updated: 2020-05-01T15:43:35.000Z\n"))
+        (b (package-tests-parse-timestamp
+            ";; Last-Updated: 2020-06-01T15:43:35.000Z\n"))
+        (c (package-tests-parse-timestamp
+            ";; Last-Updated: 2020-07-01T15:43:35.000Z\n")))
+    ;; Return nil on success.
+    (should-not (package--compare-archive-timestamps nil b "foo"))
+    (should-not (package--compare-archive-timestamps a b "foo"))
+    (should-not (package--compare-archive-timestamps a c "foo"))
+    (should-not (package--compare-archive-timestamps b c "foo"))
+    ;; Signal error.
+    (should-error (package--compare-archive-timestamps b a "foo"))
+    (should-error (package--compare-archive-timestamps c a "foo"))
+    (should-error (package--compare-archive-timestamps c b "foo"))
+    (should-error (package--compare-archive-timestamps a nil "foo"))))
+
+(ert-deftest package-test-check-archive-timestamp ()
+  (let ((package-user-dir package-test-data-dir))
+    (with-temp-buffer
+      (insert ";; Last-Updated: 2020-01-01T00:00:00.000Z\n")
+      (should-not (package--check-archive-timestamp "older"))
+      (should-not (package--check-archive-timestamp "missing"))
+      (should-error (package--check-archive-timestamp "newer")))))
+
 
 ;;; Tests for package-x features.
 
