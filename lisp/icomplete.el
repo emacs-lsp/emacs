@@ -512,11 +512,18 @@ Conditions are:
 			           max-mini-window-height)
 			          (t 1)))
         limit prospects comp)
+
+    ;; First candidate
+    (when (and prefix-len
+               icomplete-hide-common-prefix)
+      (push (substring (car comps) prefix-len) prospects)
+
+      (setq comps (cdr comps)
+            prospects-rows (1+ prospects-rows)))
+
+    ;; The others
     (while (and comps (not limit))
-      (setq comp (if (and icomplete-hide-common-prefix
-                          prefix-len)
-                     (substring (car comps) prefix-len)
-                   (car comps))
+      (setq comp (car comps)
             comps (cdr comps))
 
       (setq prospects-rows (1+ prospects-rows))
@@ -525,7 +532,8 @@ Conditions are:
 	  (push comp prospects)
         (push icomplete-ellipsis prospects)
 	(setq limit t)))
-    (nreverse prospects)))
+    (nreverse prospects)
+    ))
 
 
 (defun icomplete--vertical-mode-setup ()
