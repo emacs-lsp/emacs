@@ -1819,26 +1819,38 @@ Once it's empty, run `package--post-download-archives-hook'."
     (message "Package refresh done")
     (run-hooks 'package--post-download-archives-hook)))
 
-(defun package--parse-timestamp-from-buffer (name)
-  "Return \"archive-contents\" timestamp for archive named NAME.
+(defun package--parse-header-from-buffer (header name)
+  "Find and return \"archive-contents\" HEADER for archive NAME.
 This function assumes that the current buffer contains the
-\"archive-contents\" file.  If there is no valid timestamp, return nil.
+\"archive-contents\" file.
 
-A valid timestamp looks like:
-
-;; Last-Updated: <TIMESTAMP>
+A valid header looks like: \";; HEADER: <TIMESTAMP>\"
 
 Where <TIMESTAMP> is a valid ISO-8601 (RFC 3339) date.  If there
 is such a line but <TIMESTAMP> is invalid, show a warning and
-return nil."
+return nil.  If there is no valid header, return nil."
   (save-excursion
     (goto-char (point-min))
-    (when (re-search-forward "^;; Last-Updated: *\\(.+?\\) *$" nil t)
+    (when (re-search-forward (concat "^;; " header ": *\\(.+?\\) *$") nil t)
       (condition-case-unless-debug nil
           (encode-time (iso8601-parse (match-string 1)))
         (lwarn '(package timestamp)
                (list (format "Malformed timestamp for archive `%s': `%s'"
                              name (match-string 1))))))))
+
+(defun package--parse-valid-until-from-buffer (name)
+  "Find and return \"Valid-Until\" header for archive NAME."
+  (package--parse-header-from-buffer "Valid-Until" name))
+
+(defun package--parse-timestamp-from-buffer (name)
+  "Find and return \"Last-Updated\" header for archive NAME."
+  (package--parse-header-from-buffer "Last-Updated" name))
+
+(defun package--archive-contents-not-expired (timestamp name)
+  (when (time-less-p timestamp (current-time))
+    (user-error
+     (format-message "Package archive `%s' has sent an expired `archive-contents' file"
+                     name))))
 
 (defun package--compare-archive-timestamps (old new name)
   "Signal error unless NEW timestamp is more recent than OLD."
@@ -1884,8 +1896,10 @@ contain a timestamp."
       (let ((old (with-temp-buffer
                    (insert-file-contents old-file)
                    (package--parse-timestamp-from-buffer name)))
-            (new (package--parse-timestamp-from-buffer name)))
-        (package--compare-archive-timestamps old new name)))))
+            (new (package--parse-timestamp-from-buffer name))
+            (new-expired (package--parse-valid-until-from-buffer name)))
+        (package--compare-archive-timestamps old new name)
+        (package--archive-contents-not-expired new-expired name)))))
 
 (defun package--download-one-archive (archive file &optional async)
   "Retrieve an archive file FILE from ARCHIVE, and cache it.

@@ -854,6 +854,12 @@ If the rest succeed, just ignore the unsupported one."
       (insert "7")
       (should-error (package--verify-package-size pkg-desc)))))
 
+(ert-deftest package--parse-valid-until-from-buffer ()
+  (with-temp-buffer
+    (insert ";; Valid-Until: 2020-05-01T15:43:35.000Z\n(foo bar baz)")
+    (should (equal (package--parse-valid-until-from-buffer "foo")
+                   '(24236 17319)))))
+
 (ert-deftest package-tests--parse-timestamp-from-buffer ()
   (with-temp-buffer
     (insert ";; Last-Updated: 2020-05-01T15:43:35.000Z\n(foo bar baz)")
@@ -908,6 +914,20 @@ If the rest succeed, just ignore the unsupported one."
       (should-not (package--check-archive-timestamp "older"))
       (should-not (package--check-archive-timestamp "missing"))
       (should-error (package--check-archive-timestamp "newer")))))
+
+(ert-deftest package-test-check-archive-timestamp/not-expired ()
+  (let ((package-user-dir package-test-data-dir))
+    (with-temp-buffer
+      (insert ";; Last-Updated: 2020-01-01T00:00:00.000Z\n"
+              ";; Valid-Until: 2999-01-02T00:00:00.000Z\n")
+      (should-not (package--check-archive-timestamp "older")))))
+
+(ert-deftest package-test-check-archive-timestamp/expired ()
+  (let ((package-user-dir package-test-data-dir))
+    (with-temp-buffer
+      (insert ";; Last-Updated: 2020-01-01T00:00:00.000Z\n"
+              ";; Valid-Until: 2020-01-02T00:00:00.000Z\n")
+      (should-error (package--check-archive-timestamp "older")))))
 
 
 ;;; Tests for package-x features.
