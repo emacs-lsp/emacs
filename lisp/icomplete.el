@@ -50,6 +50,7 @@
 ;;; Code:
 
 (require 'rfn-eshadow) ; rfn-eshadow-overlay
+(require 'cl-lib)
 
 (defgroup icomplete nil
   "Show completions dynamically in minibuffer."
@@ -167,7 +168,7 @@ initialized in icomplete--minibuffer-setup")
 (defvar icomplete--map nil)
 (defvar icomplete--last-format nil)
 (defvar icomplete--prospects nil)
-
+(defvar icomplete--rows nil)
 ;;;_* Initialization
 
 ;;;_ + Internal Variables
@@ -470,17 +471,17 @@ Conditions are:
   :type 'string
   :version "28.1")
 
-(defcustom icomplete-list-indicators-vertical (cons "" "")
+(defcustom icomplete-list-indicators-vertical "%s"
   "Indicator bounds to list alternatives in the minibuffer."
   :type 'string
   :version "28.1")
 
-(defcustom icomplete-require-indicators-vertical (cons "" "")
+(defcustom icomplete-require-indicators-vertical "%s"
   "Indicator bounds for match in the minibuffer when require-match."
   :type 'string
   :version "28.1")
 
-(defcustom icomplete-not-require-indicators-vertical (cons "" "")
+(defcustom icomplete-not-require-indicators-vertical "%s"
   "Indicator bounds for match in the minibuffer when not require-match."
   :type 'string
   :version "28.1")
@@ -503,14 +504,12 @@ Conditions are:
                          ;; is already displayed via `most'.
                          (string-prefix-p prefix most t)
                          (length prefix)))
-        (prospects-rows (+ 1   ;; prompt row
-                           (if (string-match-p "\n" (car match-braket)) 1 0)   ;; match in different line
-                           (if (string-match-p "\n" (cdr match-braket)) 1 0))) ;; new line after match
+        (prospects-rows (+ 1 (cl-count ?\n match-braket))) ;; prompt + row new line around match
         (prospects-max-rows (cond ((floatp max-mini-window-height)
 			           (floor (* (frame-height) max-mini-window-height)))
 			          ((integerp max-mini-window-height)
 			           max-mini-window-height)
-			          (t 1)))
+			          (t icomplete-prospects-height)))
         limit prospects comp)
 
     ;; First candidate
@@ -532,8 +531,7 @@ Conditions are:
 	  (push comp prospects)
         (push icomplete-ellipsis prospects)
 	(setq limit t)))
-    (nreverse prospects)
-    ))
+    (nreverse prospects)))
 
 
 (defun icomplete--vertical-mode-setup ()
@@ -555,17 +553,17 @@ Conditions are:
 
 (make-obsolete-variable 'icomplete-separator 'icomplete-separator-horizontal 28.1)
 
-(defcustom icomplete-list-indicators-horizontal (cons "{" "}")
+(defcustom icomplete-list-indicators-horizontal "{%s}"
   "Indicator bounds to list alternatives in the minibuffer."
   :type 'string
   :version "28.1")
 
-(defcustom icomplete-require-indicators-horizontal (cons "(" ")")
+(defcustom icomplete-require-indicators-horizontal "(%s)"
   "Indicator bounds for match in the minibuffer when require-match."
   :type 'string
   :version "28.1")
 
-(defcustom icomplete-not-require-indicators-horizontal (cons "[" "]")
+(defcustom icomplete-not-require-indicators-horizontal "[%s]"
   "Indicator bounds for match in the minibuffer when not require-match."
   :type 'string
   :version "28.1")
@@ -579,7 +577,6 @@ Conditions are:
     map)
   "Keymap used by `fido-mode' and `icomplete-mode' unless `icomplete-vertical-mode'.")
 
-
 (defun icomplete--horizontal-prospects (match-braket prefix most determ comps)
   "List of horizontal completions limited."
 
@@ -588,9 +585,8 @@ Conditions are:
                           ;; Only hide the prefix if the corresponding info
                           ;; is already displayed via `most'.
                           (string-prefix-p prefix most t)
-                          (length prefix)))
-         (prospects-len (+ (string-width (or determ
-                                             (concat (car match-braket) (cdr match-braket))))
+                          (string-width prefix)))
+         (prospects-len (+ (string-width (or determ (format match-braket "")))
 			   (string-width icomplete--separator)
 			   (+ 2 (string-width icomplete-ellipsis)) ;; take {…} into account
 			   (string-width (buffer-string))))
@@ -602,13 +598,11 @@ Conditions are:
          limit prospects comp)
 
     (while (and comps (not limit))
-      (setq comp
-	    (if prefix-len (substring (car comps) prefix-len) (car comps))
-	    comps (cdr comps))
-      (setq prospects-len
-            (+ (string-width comp)
-	       (string-width icomplete--separator)
-	       prospects-len))
+      (setq comp (substring (car comps) prefix-len)
+	    comps (cdr comps)
+            prospects-len (+ (string-width comp)
+	                     (string-width icomplete--separator)
+	                     prospects-len))
       (if (< prospects-len prospects-max-len)
 	  (push comp prospects)
         (push icomplete-ellipsis prospects)
@@ -863,7 +857,7 @@ minibuffer completion."
 
     (if (not (consp comps))
 	(progn ;;(debug (format "Candidates=%S field=%S" candidates name))
-	  (format " %sNo matches%s" (car match-braket) (cdr match-braket)))
+          (format match-braket "No matches"))
       (if last (setcdr last nil))
       (let* ((most-try
               (if (and base-size (> base-size 0))
@@ -882,16 +876,17 @@ minibuffer completion."
 	     (determ (unless (or (eq t compare) (eq t most-try)
 				 (= (setq compare (1- (abs compare)))
 				    (length most)))
-		       (concat (car match-braket)
-			       (cond
+                       (format match-braket
+                               (cond
 				((= compare (length name))
                                  ;; Typical case: name is a prefix.
 				 (substring most compare))
                                 ;; Don't bother truncating if it doesn't gain
                                 ;; us at least 2 columns.
-				((< compare (+ 2 (string-width icomplete-ellipsis))) most)
-				(t (concat icomplete-ellipsis (substring most compare))))
-			       (cdr match-braket))))
+				((< compare (+ 2 (string-width icomplete-ellipsis)))
+                                 most)
+				(t
+                                 (concat icomplete-ellipsis (substring most compare)))))))
 
              ;; Find the common prefix among `comps'.
              ;; We can't use the optimization below because its assumptions
@@ -925,7 +920,7 @@ minibuffer completion."
 	    ;; To circumvent all the above problems, provide a visual
 	    ;; cue to the user via an "empty string" in the try
 	    ;; completion field.
-	    (setq determ (concat (car match-braket) "" (cdr match-braket))))
+	    (setq determ (format match-braket "" )))
 	  ;; Compute prospects for display.
 	  (setq prospects
                 (funcall icomplete--prospects match-braket prefix most determ comps)))
@@ -947,9 +942,8 @@ minibuffer completion."
         (when last (setcdr last base-size))
 	(if prospects
 	    (concat determ
-		    (car icomplete--list-indicators)
-		    (mapconcat 'identity prospects icomplete--separator)
-		    (cdr icomplete--list-indicators))
+                    (format icomplete--list-indicators
+		            (mapconcat 'identity prospects icomplete--separator)))
 	  (concat determ " [Matched]"))))))
 
 ;;; Iswitchb compatibility
