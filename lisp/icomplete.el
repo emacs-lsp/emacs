@@ -165,7 +165,6 @@ initialized in icomplete--minibuffer-setup")
 This is used when a single prospect is identified and is
 initialized in icomplete--minibuffer-setup")
 
-(defvar icomplete--map nil)
 (defvar icomplete--last-format nil)
 (defvar icomplete--prospects nil)
 (defvar icomplete--rows nil)
@@ -540,9 +539,10 @@ Conditions are:
               icomplete--require-indicators icomplete-require-indicators-vertical
               icomplete--list-indicators icomplete-list-indicators-vertical
               icomplete--separator icomplete-separator-vertical
-              icomplete--map (make-composed-keymap icomplete--vertical-mode-map
-                                                   (current-local-map))
-              icomplete--prospects 'icomplete--vertical-prospects))
+              icomplete--prospects 'icomplete--vertical-prospects)
+
+  (use-local-map (make-composed-keymap icomplete--vertical-mode-map
+                                       (current-local-map))))
 
 ;; Horizontal functions
 
@@ -615,9 +615,9 @@ Conditions are:
               icomplete--require-indicators icomplete-require-indicators-horizontal
               icomplete--list-indicators icomplete-list-indicators-horizontal
               icomplete--separator icomplete-separator-horizontal
-              icomplete--map (make-composed-keymap icomplete--horizontal-mode-map
-                                                   (current-local-map))
-              icomplete--prospects 'icomplete--horizontal-prospects))
+              icomplete--prospects 'icomplete--horizontal-prospects)
+  (use-local-map (make-composed-keymap icomplete--horizontal-mode-map
+                                       (current-local-map))))
 
 
 ;;;_ > icomplete--minibuffer-setup ()
