@@ -27,11 +27,18 @@
 (require 'macroexp)
 (eval-when-compile (require 'cl-lib))
 
-(defface shortdoc-example-face
+(defface shortdoc-section
+  '((((class color) (background dark))
+     (:background "#505050" :extend t))
+    (((class color) (background light))
+     (:background "#e0e0e0" :extend t)))
+  "Face used for a section.")
+
+(defface shortdoc-example
   '((((class color) (background dark))
      (:background "#808080" :extend t))
     (((class color) (background light))
-     (:background "#c0c0c0")))
+     (:background "#c0c0c0" :extend t)))
   "Face used for examples.")
 
 (defvar shortdoc--groups nil)
@@ -69,8 +76,8 @@ manual should be used, use the \"(Manual)Node\" form."
    :example (string-trim-left "oofoo" "o+")
    :result "foo")
   (string-trim-right
-   :example (string-trim-right "bark" "k")
-   :result "bar")
+   :example (string-trim-right "barkss" "s+")
+   :result "bark")
   (concat
    :node "Creating Strings"
    :example (concat "foo" "bar" "zot")
@@ -186,23 +193,25 @@ manual should be used, use the \"(Manual)Node\" form."
     (button-mode)
     (mapc
      (lambda (data)
-       (let* ((function (pop data)))
+       (let ((function (pop data))
+             (start-section (point)))
          ;; Function calling convention.
          (insert "(")
          (let ((node (plist-get data :node)))
            (if node
                (insert-text-button
                 (symbol-name function)
+                'face 'button
                 'action (lambda (_)
                           (Info-goto-node
                            (if (string-match "^(" node)
                                (concat "(Elisp)" node)
                              node))))
              (insert (symbol-name function))))
-         (dolist (param (or (plist-get data :call)
+         (dolist (param (or (plist-get data :args)
                             (help-function-arglist function t)))
            (insert " " (symbol-name param)))
-         (insert ")\n\n")
+         (insert ")\n")
          ;; Doc string.
          (insert "  "
                  (propertize
@@ -210,6 +219,7 @@ manual should be used, use the \"(Manual)Node\" form."
                       (car (split-string (documentation function) "\n")))
                   'face 'variable-pitch))
          (insert "\n\n")
+         (add-face-text-property start-section (point) 'shortdoc-section t)
          (let ((start (point)))
            (cl-loop for (type value) on data by #'cddr
                     when (eq type :example)
@@ -222,8 +232,8 @@ manual should be used, use the \"(Manual)Node\" form."
                          (insert "    => ")
                          (prin1 value (current-buffer))
                          (insert "\n")))
-           (put-text-property start (point) 'face 'shortdoc-example-face))
-         (insert "\n\n")))
+           (put-text-property start (point) 'face 'shortdoc-example))
+         (insert "\n")))
      (cdr (assq group shortdoc--groups))))
   (goto-char (point-min)))
 
