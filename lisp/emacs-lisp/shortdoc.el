@@ -50,19 +50,17 @@
 FUNCTIONS is a list of elements on the form:
 
   (fun
+   :no-manual BOOL
    :args ARGS
-   :example FORM
-   :node INFO-NODE
-   :result FORM)
+   :example FORM)
+
+BOOL should be non-nil if the function isn't documented in the
+manual.
 
 ARGS is optional, and the functions definition is displayed
 instead in not present.
 
-There can be any number of :example/:result pairs.
-
-INFO-NODE should be a node in the manual where the function is
-documented.  It will default to the elisp manual; if some other
-manual should be used, use the \"(Manual)Node\" form."
+There can be any number of :example/:result pairs."
   `(progn
      (setq shortdoc--groups (delq (assq ',group shortdoc--groups)
                                   shortdoc--groups))
@@ -73,114 +71,78 @@ manual should be used, use the \"(Manual)Node\" form."
    :no-manual t
    :args (string)
    :doc "Trim STRING of leading and trailing white space."
-   :example (string-trim " foo ")
-   :result "foo")
+   :example (string-trim " foo "))
   (string-trim-left
    :no-manual t
-   :example (string-trim-left "oofoo" "o+")
-   :result "foo")
+   :example (string-trim-left "oofoo" "o+"))
   (string-trim-right
    :no-manual t
-   :example (string-trim-right "barkss" "s+")
-   :result "bark")
+   :example (string-trim-right "barkss" "s+"))
   (concat
-   :example (concat "foo" "bar" "zot")
-   :result "foobarzot")
+   :example (concat "foo" "bar" "zot"))
   (string-join
-   :example (string-join '("foo" "bar" "zot") " ")
-   :result "foo bar zot")
+   :example (string-join '("foo" "bar" "zot") " "))
   (mapconcat
-   :example (mapconcat (lambda (a) (concat "[" a "]")) '("foo" "bar" "zot") " ")
-   :result "[foo] [bar] [zot]")
+   :example (mapconcat (lambda (a) (concat "[" a "]"))
+                       '("foo" "bar" "zot") " "))
   (make-string
-   :example (make-string 5 ?x)
-   :result "xxxxx")
+   :example (make-string 5 ?x))
   (string
-   :example (string ?a ?b ?c)
-   :result "abc")
+   :example (string ?a ?b ?c))
   (substring
    :example (substring "foobar" 0 3)
-   :result "foo"
-   :example (substring "foobar" 3)
-   :result "bar")
+   :example (substring "foobar" 3))
   (substring-no-properties
-   :example (substring (propertize "foobar" 'face 'bold) 0 3)
-   :result "foo")
+   :example (substring (propertize "foobar" 'face 'bold) 0 3))
   (string-equal
-   :example (string-equal "foo" "foo")
-   :result t)
+   :example (string-equal "foo" "foo"))
   (string-lessp
-   :example (string-lessp "foo" "bar")
-   :result nil)
+   :example (string-lessp "foo" "bar"))
   (string-greaterp
-   :example (string-greaterp "foo" "bar")
-   :result t)
+   :example (string-greaterp "foo" "bar"))
   (string-version-lessp
-   :example (string-lessp "foo32.png" "bar4.png")
-   :result nil)
+   :example (string-lessp "foo32.png" "bar4.png"))
   (string-prefix-p
-   :example (string-prefix-p "foo" "foobar")
-   :result t)
+   :example (string-prefix-p "foo" "foobar"))
   (string-suffix-p
-   :example (string-suffix-p "bar" "foobar")
-   :result t)
+   :example (string-suffix-p "bar" "foobar"))
   (upcase
-   :example (upcase "foo")
-   :result "FOO")
+   :example (upcase "foo"))
   (downcase
-   :example (downcase "FOObar")
-   :result "foobar")
+   :example (downcase "FOObar"))
   (capitalize
-   :example (capitalize "foo bar zot")
-   :result "Foo Bar Zot")
+   :example (capitalize "foo bar zot"))
   (upcase-initials
-   :example (upcase-initials "The CAT in the hAt")
-   :result "The CAT In The HAt")
+   :example (upcase-initials "The CAT in the hAt"))
   (string-to-number
    :example (string-to-number "42")
-   :result 42
-   :example (string-to-number "deadbeef" 16)
-   :result 3735928559)
+   :example (string-to-number "deadbeef" 16))
   (number-to-string
-   :example (number-to-string 42)
-   :result "42")
+   :example (number-to-string 42))
   (length
-   :example (length "foo")
-   :result 3)
+   :example (length "foo"))
   (reverse
-   :example (reverse "foo")
-   :result "oof")
+   :example (reverse "foo"))
   (seq-position
-   :example (seq-position "foobarzot" ?z)
-   :result 6)
+   :example (seq-position "foobarzot" ?z))
   (format
-   :example (format "This number is %d" 4)
-   :result "This number is 4")
+   :example (format "This number is %d" 4))
   (stringp
-   :example (stringp ?a)
-   :result nil)
+   :example (stringp ?a))
   (string-empty-p
-   :example (string-empty-p "")
-   :result t)
+   :example (string-empty-p ""))
   (string-blank-p
-   :example (string-blank-p " \n")
-   :result 0)
+   :example (string-blank-p " \n"))
   (string-truncate-left
-   :example (string-truncate-left "longstring" 8)
-   :result "...string")
+   :example (string-truncate-left "longstring" 8))
   (string-remove-suffix
-   :example (string-remove-suffix "bar" "foobar")
-   :result "foo")
+   :example (string-remove-suffix "bar" "foobar"))
   (string-remove-prefix
-   :example (string-remove-prefix "foo" "foobar")
-   :result "foo")
+   :example (string-remove-prefix "foo" "foobar"))
   (split-string
    :example (split-string "foo bar")
-   :result ("foo" "bar")
    :example (split-string "|foo|bar|" "|")
-   :result ("" "foo" "bar" "")
-   :example (split-string "|foo|bar|" "|" t)
-   :result ("foo" "bar")))
+   :example (split-string "|foo|bar|" "|" t)))
 
 (defun shortdoc-display-group (group)
   "Pop to a buffer and display short documentation for functions in GROUP."
@@ -221,6 +183,9 @@ manual should be used, use the \"(Manual)Node\" form."
                     do (progn
                          (insert "  ")
                          (prin1 value (current-buffer))
+                         (insert "\n")
+                         (insert "    => ")
+                         (prin1 (eval value) (current-buffer))
                          (insert "\n"))
                     when (eq type :result)
                     do (progn
