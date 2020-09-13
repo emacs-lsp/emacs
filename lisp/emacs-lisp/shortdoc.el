@@ -27,6 +27,10 @@
 (require 'macroexp)
 (eval-when-compile (require 'cl-lib))
 
+(defgroup shortdoc nil
+  "Short documentation."
+  :group 'lisp)
+
 (defface shortdoc-section
   '((((class color) (background dark))
      (:inherit variable-pitch
@@ -67,11 +71,12 @@ a string, it'll be inserted as is.  In that case, there should be
 a form that says what the result should be.
 
 There can be any number of :example/:result elements."
-  `(eval-and-compile
+  `(progn
      (setq shortdoc--groups (delq (assq ',group shortdoc--groups)
                                   shortdoc--groups))
      (push (cons ',group ',functions) shortdoc--groups)))
 
+;;;###autoload
 (define-short-documentation-group string
   "Making Strings"
   (make-string
@@ -184,7 +189,7 @@ There can be any number of :example/:result elements."
         (start-section (point)))
     ;; Function calling convention.
     (insert "(")
-    (if (getf data :no-manual)
+    (if (plist-get data :no-manual)
         (insert (symbol-name function))
       (insert-text-button
        (symbol-name function)
@@ -221,6 +226,7 @@ There can be any number of :example/:result elements."
       (put-text-property start (point) 'face 'shortdoc-example))
     (insert "\n")))
 
+;;;###autoload
 (defun shortdoc-function-groups (function)
   "Return all shortdoc groups FUNCTION appears in."
   (cl-loop for group in shortdoc--groups
