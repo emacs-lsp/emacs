@@ -148,6 +148,12 @@ icompletion is occurring."
                  (const vertical))
   :version "28.1")
 
+
+(defcustom icomplete-item-format "%s"
+  "Indicator bounds for match in the minibuffer when require-match."
+  :type 'string
+  :version "28.1")
+
 (defvar icomplete--separator nil
   "If there are multiple possibilities this separates them.")
 
@@ -943,7 +949,10 @@ minibuffer completion."
 	(if prospects
 	    (concat determ
                     (format icomplete--list-indicators
-		            (mapconcat 'identity prospects icomplete--separator)))
+		            (mapconcat
+                             (lambda (item)
+                               (format icomplete-item-format item))
+                             prospects icomplete--separator)))
 	  (concat determ " [Matched]"))))))
 
 ;;; Iswitchb compatibility
