@@ -29,9 +29,11 @@
 
 (defface shortdoc-section
   '((((class color) (background dark))
-     (:background "#505050" :extend t))
+     (:inherit variable-pitch
+               :background "#808080" :extend t))
     (((class color) (background light))
-     (:background "#e0e0e0" :extend t)))
+     (:inherit variable-pitch
+               :background "#c0c0c0" :extend t)))
   "Face used for a section.")
 
 (defface shortdoc-example
@@ -190,10 +192,8 @@ manual should be used, use the \"(Manual)Node\" form."
          (insert ")\n")
          ;; Doc string.
          (insert "  "
-                 (propertize
-                  (or (plist-get data :doc)
-                      (car (split-string (documentation function) "\n")))
-                  'face 'variable-pitch))
+                 (or (plist-get data :doc)
+                     (car (split-string (documentation function) "\n"))))
          (insert "\n\n")
          (add-face-text-property start-section (point) 'shortdoc-section t)
          (let ((start (point)))
