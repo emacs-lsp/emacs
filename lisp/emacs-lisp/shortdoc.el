@@ -86,9 +86,12 @@ manual should be used, use the \"(Manual)Node\" form."
   (concat
    :example (concat "foo" "bar" "zot")
    :result "foobarzot")
-  (mapconcat
-   :example (mapconcat #'identity '("foo" "bar" "zot") " ")
+  (string-join
+   :example (string-join '("foo" "bar" "zot") " ")
    :result "foo bar zot")
+  (mapconcat
+   :example (mapconcat (lambda (a) (concat "[" a "]")) '("foo" "bar" "zot") " ")
+   :result "[foo] [bar] [zot]")
   (make-string
    :example (make-string 5 ?x)
    :result "xxxxx")
@@ -156,6 +159,21 @@ manual should be used, use the \"(Manual)Node\" form."
   (stringp
    :example (stringp ?a)
    :result nil)
+  (string-empty-p
+   :example (string-empty-p "")
+   :result t)
+  (string-blank-p
+   :example (string-blank-p " \n")
+   :result 0)
+  (string-truncate-left
+   :example (string-truncate-left "longstring" 8)
+   :result "...string")
+  (string-remove-suffix
+   :example (string-remove-suffix "bar" "foobar")
+   :result "foo")
+  (string-remove-prefix
+   :example (string-remove-prefix "foo" "foobar")
+   :result "foo")
   (split-string
    :example (split-string "foo bar")
    :result ("foo" "bar")
@@ -196,7 +214,8 @@ manual should be used, use the \"(Manual)Node\" form."
                      (car (split-string (documentation function) "\n"))))
          (insert "\n\n")
          (add-face-text-property start-section (point) 'shortdoc-section t)
-         (let ((start (point)))
+         (let ((start (point))
+               (print-escape-newlines t))
            (cl-loop for (type value) on data by #'cddr
                     when (eq type :example)
                     do (progn
