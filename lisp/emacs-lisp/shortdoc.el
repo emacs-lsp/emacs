@@ -76,7 +76,6 @@ There can be any number of :example/:result elements."
                                   shortdoc--groups))
      (push (cons ',group ',functions) shortdoc--groups)))
 
-;;;###autoload
 (define-short-documentation-group string
   "Making Strings"
   (make-string
@@ -103,6 +102,8 @@ There can be any number of :example/:result elements."
    :example (split-string "foo bar")
    :example (split-string "|foo|bar|" "|")
    :example (split-string "|foo|bar|" "|" t))
+  (replace-regexp-in-string
+   :example (replace-regexp-in-string "[a-z]+" "_" "*foo*"))
   (string-trim
    :no-manual t
    :args (string)
@@ -166,6 +167,159 @@ There can be any number of :example/:result elements."
    :example "(seq-position \"foobarzot\" ?z)"
    :result 6))
 
+(define-short-documentation-group list
+  "Making Lists"
+  (make-list
+   :example (make-list 5 'a))
+  (cons
+   :example (cons 1 '(2 3 4)))
+  (list
+   :example (list 1 2 3))
+  "Operations on Lists"
+  (append
+   :example (append '("foo" "bar") '("zot")))
+  (flatten-tree
+   :example (flatten-tree '(1 (2 3) 4)))
+  (car
+   :example (car '(one two three)))
+  (cdr
+   :example (cdr '(one two three)))
+  (push
+   :example-no-result (push 'a list))
+  "Mapping Over Lists"
+  (mapcar
+   :example (mapcar #'1+ '(1 2 3)))
+  (reduce
+   :example (reduce #'+ '(1 2 3)))
+  "Predicates"
+  (listp
+   :example (listp '(1 2 3))
+   :example (listp nil)
+   :example (listp '(1 . 2)))
+  (consp
+   :example (consp '(1 2 3))
+   :example (consp nil))
+  (proper-list-p
+   :example (proper-list-p '(1 2 3))
+   :example (proper-list-p nil)
+   :example (proper-list-p '(1 . 2))))
+
+(define-short-documentation-group vector
+  (make-vector
+   :example (make-vector 5 "foo"))
+  (vectorp
+   :example (vectorp [1])
+   :example (vectorp "1"))
+  (length
+   :example (length [1 2 3]))
+  (seq-subseq
+   :example (seq-subseq [1 2 3 4 5] 1 3)
+   :example (seq-subseq [1 2 3 4 5] 1)))
+
+(define-short-documentation-group regexp
+  "Matching Strings"
+  (replace-regexp-in-string
+   :example (replace-regexp-in-string "[a-z]+" "_" "*foo*"))
+  (string-match-p
+   :example (string-match-p "^[fo]+" "foobar"))
+  (match-string
+   :example (and (string-match "^[fo]+" "foobar") (match-string 0 "foobar")))
+  "Looking in Buffers"
+  (re-search-forward
+   :example-no-result (re-search-forward "^foo$" nil t))
+  (re-search-backward
+   :example-no-result (re-search-backward "^foo$" nil t))
+  (looking-at-p
+   :example-no-result (looking-at "f[0-9"))
+  "Utilities"
+  (regexp-quote
+   :example (regexp-quote "foo.*bar"))
+  (regexp-opt
+   :example (regexp-opt '("foo" "bar"))))
+
+(define-short-documentation-group buffer
+  "Buffer Basics"
+  (current-buffer
+   :example-no-result (current-buffer))
+  (bufferp
+   :example (bufferp 23))
+  (buffer-live-p
+   :example-no-result (buffer-live-p))
+  (buffer-modified-p
+   :example (buffer-modified-p (current-buffer)))
+  (buffer-name
+   :example (buffer-name))
+  (window-buffer
+   :example (window-buffer))
+  "Selecting Buffers"
+  (get-buffer-create
+   :example-no-result (get-buffer-create "*foo*"))
+  (pop-to-buffer
+   :example-no-result (pop-to-buffer "*foo*"))
+  (with-current-buffer
+      :example-no-result (with-current-buffer buffer (buffer-size)))
+  "Points and Positions"
+  (point
+   :example (point))
+  (point-min
+   :example (point-max))
+  (point-max
+   :example (point-max))
+  (line-beginning-position
+   :example (line-beginning-position))
+  (line-end-position
+   :example (line-end-position))
+  (buffer-size
+   :example (buffer-size))
+  "Moving Around"
+  (goto-char
+   :example-no-result (goto-char (point-max)))
+  (search-forward
+   :example-no-result (search-forward "some-string" nil t))
+  (re-search-forward
+   :example-no-result (re-search-forward "some-s.*g" nil t))
+  (forward-line
+   :example-no-result (forward-line 1))
+  (backward-line
+   :example-no-result (backward-line 4))
+  "Strings from Buffers"
+  (buffer-string
+   :example-no-result (buffer-string))
+  (buffer-substring
+   :example (buffer-substring (point-min) (1+ (point-min))))
+  (buffer-substring-no-properties
+   :example (buffer-substring-no-properties (point-min) (+ (point-min) 10)))
+  (following-char
+   :example-no-result (following-char))
+  (char-after
+   :example (char-after 45))
+  "Altering Buffers"
+  (delete-region
+   :example-no-result (delete-region (point-min) (point-max)))
+  (erase-buffer
+   :example-no-result (erase-buffer))
+  (insert
+   :example-no-result (insert "This string will be inserted in the buffer\n")))
+
+(define-short-documentation-group process
+  (make-process
+   :example-no-result (make-process :name "foo" :command '("cat" "/tmp/foo")))
+  (processp
+   :example (processp t))
+  (delete-process
+   :example-no-result (delete-process process))
+  (kill-process
+   :example-no-result (kill-process process))
+  (set-process-sentinel
+   :example-no-result (set-process-sentinel process (lambda (proc string))))
+  (process-buffer
+   :example-no-result (process-buffer process))
+  (get-buffer-process
+   :example-no-result (get-buffer-process buffer))
+  (process-live-p
+   :example-no-result (process-live-p process)))
+
+;;;###autoload
 (defun shortdoc-display-group (group)
   "Pop to a buffer and display short documentation for functions in GROUP."
   (unless (assq group shortdoc--groups)
@@ -210,20 +364,28 @@ There can be any number of :example/:result elements."
     (let ((start (point))
           (print-escape-newlines t))
       (cl-loop for (type value) on data by #'cddr
-               when (eq type :example)
-               do (if (stringp value)
+               do
+               (cl-case type
+                (:example
+                 (if (stringp value)
                       (insert "  " value "\n")
                     (insert "  ")
                     (prin1 value (current-buffer))
                     (insert "\n")
                     (insert "    => ")
                     (prin1 (eval value) (current-buffer))
-                    (insert "\n"))
-               when (eq type :result)
-               do (progn
-                    (insert "    => ")
-                    (prin1 value (current-buffer))
                     (insert "\n")))
+                (:example-no-result
+                 (insert "  ")
+                 (prin1 value (current-buffer))
+                 (insert "\n    -> "
+                         (propertize "[it depends]"
+                                     'face 'variable-pitch)
+                         "\n"))
+                (:result
+                 (insert "    => ")
+                 (prin1 value (current-buffer))
+                 (insert "\n"))))
       (put-text-property start (point) 'face 'shortdoc-example))
     (insert "\n")))
 
