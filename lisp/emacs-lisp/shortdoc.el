@@ -191,6 +191,8 @@ There can be any number of :example/:result elements."
    :example (mapcar #'1+ '(1 2 3)))
   (reduce
    :example (reduce #'+ '(1 2 3)))
+  (mapconcat
+   :example (mapconcat #'identity '("foo" "bar") "|"))
   "Predicates"
   (listp
    :example (listp '(1 2 3))
@@ -202,7 +204,9 @@ There can be any number of :example/:result elements."
   (proper-list-p
    :example (proper-list-p '(1 2 3))
    :example (proper-list-p nil)
-   :example (proper-list-p '(1 . 2))))
+   :example (proper-list-p '(1 . 2)))
+  (null
+   :example (null nil)))
 
 (define-short-documentation-group vector
   (make-vector
@@ -224,6 +228,10 @@ There can be any number of :example/:result elements."
    :example (string-match-p "^[fo]+" "foobar"))
   (match-string
    :example (and (string-match "^[fo]+" "foobar") (match-string 0 "foobar")))
+  (match-beginning
+   :example-no-result (match-beginning 1))
+  (match-end
+   :example-no-result (match-end 2))
   "Looking in Buffers"
   (re-search-forward
    :example-no-result (re-search-forward "^foo$" nil t))
@@ -236,6 +244,89 @@ There can be any number of :example/:result elements."
    :example (regexp-quote "foo.*bar"))
   (regexp-opt
    :example (regexp-opt '("foo" "bar"))))
+
+(define-short-documentation-group sequence
+  (seq-contains-p
+   :example (seq-contains '(a b c) 'b)
+   :example (seq-contains '(a b c) 'd))
+  (seq-concatenate
+   :example (seq-concatenate 'vector '(1 2) '(c d)))
+  (seq-count
+   :example (seq-count #'numberp '(1 b c 4)))
+  (seq-copy
+   :example (seq-copy '(a 2)))
+  (seq-difference
+   :example (seq-difference '(1 2 3) '(2 3 4)))
+  (seq-do
+   :example-no-result (seq-do (lambda (a) (insert a)) '("foo" "bar")))
+  (seq-do-indexed
+   :example-no-result (seq-do-indexed
+                       (lambda (a index) (message "%s:%s" index a))
+                       '("foo" "bar")))
+  (seq-drop
+   :example (seq-drop '(a b c) 2))
+  (seq-drop-while
+   :example (seq-drop-while #'numberp '(1 2 c d 5)))
+  (seq-elt
+   :example (seq-elt '(a b c) 1))
+  (seq-empty-p
+   :example (seq-empty-p []))
+  (seq-every-p
+   :example (seq-every-p #'numberp '(1 2 3)))
+  (seq-filter
+   :example (seq-filter #'numberp '(a b 3 4 f 6)))
+  (seq-find
+   :example (seq-find #'numberp '(a b 3 4 f 6)))
+  (seq-first
+   :example (seq-first [a b c]))
+  (seq-group-by
+   :example (seq-group-by #'cl-plusp '(-1 2 3 -4 -5 6)))
+  (seq-intersection
+   :example (seq-intersection '(1 2 3) '(2 3 4)))
+  (seq-into
+   :example (seq-into '(1 2 3) 'vector))
+  (seq-length
+   :example (seq-length "abcde"))
+  (seq-map
+   :example (seq-map #'1+ '(1 2 3)))
+  (seq-map-indexed
+   :example (seq-map-indexed (lambda (a i) (cons i a)) '(a b c)))
+  (seq-mapcat
+   :example (seq-mapcat #'upcase '("a" "b" "c") 'string))
+  (seq-max
+   :example (seq-max [1 2 3]))
+  (seq-min
+   :example (seq-min [1 2 3]))
+  (seq-partition
+   :example (seq-partition '(a b c d e f g h) 3))
+  (seq-position
+   :example (seq-position '(a b c) 'c))
+  (seq-random-elt
+   :example-no-result (seq-random-elt '(a b c)))
+  (seq-reduce
+   :example (seq-reduce #'* [1 2 3] 2))
+  (seq-remove
+   :example (seq-remove #'numberp '(1 2 c d 5)))
+  (seq-rest
+   :example (seq-rest '(1 2 3)))
+  (seq-reverse
+   :example (seq-reverse '(1 2 3)))
+  (seq-set-equal-p
+   :example (seq-set-equal-p '(1 2 3) '(3 1 2)))
+  (seq-some
+   :example (seq-some #'cl-evenp '(1 2 3)))
+  (seq-sort
+   :example (seq-sort #'> '(1 2 3)))
+  (seq-sort-by
+   :example (seq-sort-by (lambda (a) (/ 1.0 a)) #'< '(1 2 3)))
+  (seq-subseq
+   :example (seq-subseq '(a b c d e) 2 4))
+  (seq-take
+   :example (seq-take '(a b c d e) 3))
+  (seq-take-while
+   :example (seq-take-while #'cl-evenp [2 4 9 6 5]))
+  (seq-uniq
+   :example (seq-uniq '(a b d b a c))))
 
 (define-short-documentation-group buffer
   "Buffer Basics"
