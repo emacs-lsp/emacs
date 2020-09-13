@@ -149,9 +149,17 @@ icompletion is occurring."
   :version "28.1")
 
 
-(defcustom icomplete-item-format "%s"
-  "Indicator bounds for match in the minibuffer when require-match."
-  :type 'string
+(defcustom icomplete-item-format nil
+  "Format to use in every completion item.
+
+When this variable is a string the items are added using the
+format function.  When this variable is a function the items are
+calling the function and passing it as a parameter.  The function
+is passed to mapcar and should receive one string argument and
+return a string."
+  :type '(choice (string :tag "String format")
+                (function :tag "Format function")
+                (const :tag "None" nil))
   :version "28.1")
 
 (defvar icomplete--separator nil
@@ -449,6 +457,14 @@ completions:
   (let* ((beg (icomplete--field-beg))
          (md (completion--field-metadata beg)))
     (alist-get 'category (cdr md))))
+
+(defun icomplete--format-function (item)
+  (cond
+   ((stringp icomplete-item-format)
+    (format icomplete-item-format item))
+   ((functionp icomplete-item-format)
+    (funcall icomplete-item-format item))
+   (t item)))
 
 ;;;_ > icomplete-simple-completing-p ()
 (defun icomplete-simple-completing-p ()
@@ -950,9 +966,7 @@ minibuffer completion."
 	    (concat determ
                     (format icomplete--list-indicators
 		            (mapconcat
-                             (lambda (item)
-                               (format icomplete-item-format item))
-                             prospects icomplete--separator)))
+                             #'icomplete--format-function prospects icomplete--separator)))
 	  (concat determ " [Matched]"))))))
 
 ;;; Iswitchb compatibility
