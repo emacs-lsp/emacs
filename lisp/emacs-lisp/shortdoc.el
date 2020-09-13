@@ -68,114 +68,93 @@ manual should be used, use the \"(Manual)Node\" form."
 
 (define-short-documentation-group string
   (string-trim
+   :no-manual t
    :args (string)
    :doc "Trim STRING of leading and trailing white space."
    :example (string-trim " foo ")
    :result "foo")
   (string-trim-left
+   :no-manual t
    :example (string-trim-left "oofoo" "o+")
    :result "foo")
   (string-trim-right
+   :no-manual t
    :example (string-trim-right "barkss" "s+")
    :result "bark")
   (concat
-   :node "Creating Strings"
    :example (concat "foo" "bar" "zot")
    :result "foobarzot")
   (mapconcat
-   :node "Mapping Functions"
    :example (mapconcat #'identity '("foo" "bar" "zot") " ")
    :result "foo bar zot")
   (make-string
-   :node "Creating Strings"
    :example (make-string 5 ?x)
    :result "xxxxx")
   (string
-   :node "Creating Strings"
    :example (string ?a ?b ?c)
    :result "abc")
   (substring
-   :node "Creating Strings"
    :example (substring "foobar" 0 3)
    :result "foo"
    :example (substring "foobar" 3)
    :result "bar")
   (substring-no-properties
-   :node "Creating Strings"
    :example (substring (propertize "foobar" 'face 'bold) 0 3)
    :result "foo")
   (string-equal
-   :node "Comparison of Characters and Strings"
    :example (string-equal "foo" "foo")
    :result t)
   (string-lessp
-   :node "Comparison of Characters and Strings"
    :example (string-lessp "foo" "bar")
    :result nil)
   (string-greaterp
-   :node "Comparison of Characters and Strings"
    :example (string-greaterp "foo" "bar")
    :result t)
   (string-version-lessp
-   :node "Comparison of Characters and Strings"
    :example (string-lessp "foo32.png" "bar4.png")
    :result nil)
   (string-prefix-p
-   :node "Comparison of Characters and Strings"
    :example (string-prefix-p "foo" "foobar")
    :result t)
   (string-suffix-p
-   :node "Comparison of Characters and Strings"
    :example (string-suffix-p "bar" "foobar")
    :result t)
   (upcase
-   :node "Case Conversion in Lisp"
    :example (upcase "foo")
    :result "FOO")
   (downcase
-   :node "Case Conversion in Lisp"
    :example (downcase "FOObar")
    :result "foobar")
   (capitalize
-   :node "Case Conversion in Lisp"
    :example (capitalize "foo bar zot")
    :result "Foo Bar Zot")
   (upcase-initials
-   :node "Case Conversion in Lisp"
    :example (upcase-initials "The CAT in the hAt")
    :result "The CAT In The HAt")
   (string-to-number
-   :node "String Conversion"
    :example (string-to-number "42")
    :result 42
    :example (string-to-number "deadbeef" 16)
    :result 3735928559)
   (number-to-string
-   :node "String Conversion"
    :example (number-to-string 42)
    :result "42")
   (length
-   :node "Sequences"
    :example (length "foo")
    :result 3)
   (reverse
-   :node "Sequences"
    :example (reverse "foo")
    :result "oof")
   (seq-position
-   :node "Sequences"
    :example (seq-position "foobarzot" ?z)
    :result 6)
   (format
-   :node "Formatting Strings"
    :example (format "This number is %d" 4)
    :result "This number is 4")
   (stringp
-   :node "Predicates for Strings"
    :example (stringp ?a)
    :result nil)
   (split-string
-   :node "Creating Strings"
    :example (split-string "foo bar")
    :result ("foo" "bar")
    :example (split-string "|foo|bar|" "|")
@@ -190,6 +169,7 @@ manual should be used, use the \"(Manual)Node\" form."
   (pop-to-buffer (format "*Shortdoc %s*" group))
   (let ((inhibit-read-only t))
     (erase-buffer)
+    (special-mode)
     (button-mode)
     (mapc
      (lambda (data)
@@ -197,17 +177,13 @@ manual should be used, use the \"(Manual)Node\" form."
              (start-section (point)))
          ;; Function calling convention.
          (insert "(")
-         (let ((node (plist-get data :node)))
-           (if node
-               (insert-text-button
-                (symbol-name function)
-                'face 'button
-                'action (lambda (_)
-                          (Info-goto-node
-                           (if (string-match "^(" node)
-                               (concat "(Elisp)" node)
-                             node))))
-             (insert (symbol-name function))))
+         (if (getf data :no-manual)
+             (insert (symbol-name function))
+           (insert-text-button
+            (symbol-name function)
+            'face 'button
+            'action (lambda (_)
+                      (info-lookup-symbol function 'emacs-lisp-mode))))
          (dolist (param (or (plist-get data :args)
                             (help-function-arglist function t)))
            (insert " " (symbol-name param)))
@@ -236,6 +212,12 @@ manual should be used, use the \"(Manual)Node\" form."
          (insert "\n")))
      (cdr (assq group shortdoc--groups))))
   (goto-char (point-min)))
+
+(defun shortdoc-function-groups (function)
+  "Return all shortdoc groups FUNCTION appears in."
+  (cl-loop for group in shortdoc--groups
+           when (assq function (cdr group))
+           collect (car group)))
 
 (provide 'shortdoc)
 
