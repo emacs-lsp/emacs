@@ -919,7 +919,7 @@ minibuffer completion."
              ;;     (length most)
              ;; Else, use try-completion.
 	     (prefix (try-completion "" comps))
-	     prospects)
+	     prospects first)
 
 	(if (or (eq most-try t)
                 (not (consp (cdr comps))))
@@ -952,21 +952,17 @@ minibuffer completion."
           (setq-local completion-content-when-empty (car prospects)))
         ;; Decorate first of the prospects.
 	(when prospects
-	  (let ((first (copy-sequence (pop prospects))))
-	    (put-text-property 0 (length first)
-			       'face 'icomplete-first-match first)
-	    (push first prospects)
+          (setq first (pop prospects))
 
-            (put-text-property 0 (length determ)
-			       'face 'icomplete-common-match determ)))
+	  (put-text-property 0 (length first) 'face 'icomplete-first-match first)
+          (put-text-property 0 (length determ) 'face 'icomplete-common-match determ))
         ;; Restore the base-size info, since completion-all-sorted-completions
         ;; is cached.
         (when last (setcdr last base-size))
-	(if prospects
-	    (concat determ
-                    (format icomplete--list-indicators
-		            (mapconcat
-                             #'icomplete--format-function prospects icomplete--separator)))
+	(if (or first prospects)
+            (format (concat determ first icomplete--separator icomplete--list-indicators)
+                    (mapconcat
+                     #'icomplete--format-function prospects icomplete--separator))
 	  (concat determ " [Matched]"))))))
 
 ;;; Iswitchb compatibility
