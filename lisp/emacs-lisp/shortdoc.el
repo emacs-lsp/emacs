@@ -34,7 +34,7 @@
 (defface shortdoc-section
   '((((class color) (background dark))
      (:inherit variable-pitch
-               :background "#808080" :extend t))
+               :background "#303030" :extend t))
     (((class color) (background light))
      (:inherit variable-pitch
                :background "#c0c0c0" :extend t)))
@@ -42,7 +42,7 @@
 
 (defface shortdoc-example
   '((((class color) (background dark))
-     (:background "#808080" :extend t))
+     (:background "#202020" :extend t))
     (((class color) (background light))
      (:background "#c0c0c0" :extend t)))
   "Face used for examples.")
@@ -80,6 +80,7 @@ There can be any number of :example/:result elements."
 (define-short-documentation-group string
   "Making Strings"
   (make-string
+   :args (length init)
    :example "(make-string 5 ?x)"
    :result "xxxxx")
   (string
@@ -122,8 +123,8 @@ There can be any number of :example/:result elements."
   (reverse
    :example (reverse "foo"))
   (substring-no-properties
-   :example (substring (propertize "foobar" 'face 'bold) 0 3))
-  "Predicates for String"
+   :example (substring-no-properties (propertize "foobar" 'face 'bold) 0 3))
+  "Predicates for Strings"
   (string-equal
    :example (string-equal "foo" "foo"))
   (stringp
@@ -204,7 +205,7 @@ There can be any number of :example/:result elements."
     (insert "  "
             (or (plist-get data :doc)
                 (car (split-string (documentation function) "\n"))))
-    (insert "\n\n")
+    (insert "\n")
     (add-face-text-property start-section (point) 'shortdoc-section t)
     (let ((start (point))
           (print-escape-newlines t))
