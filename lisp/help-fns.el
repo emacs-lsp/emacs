@@ -659,9 +659,13 @@ FILE is the file where FUNCTION was probably defined."
         (insert (format "  Probably introduced at or before Emacs version %s.\n"
                         first))))))
 
+(declare-function shortdoc-display-group "shortdoc")
+(declare-function shortdoc-function-groups "shortdoc")
+
 (add-hook 'help-fns-describe-function-functions
           #'help-fns--mention-shortdoc-groups)
 (defun help-fns--mention-shortdoc-groups (object)
+  (require 'shortdoc)
   (mapc
    (lambda (group)
      (with-current-buffer standard-output

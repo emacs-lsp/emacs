@@ -25,6 +25,7 @@
 ;;; Code:
 
 (require 'macroexp)
+(require 'seq)
 (eval-when-compile (require 'cl-lib))
 
 (defgroup shortdoc nil
@@ -37,7 +38,7 @@
                :background "#303030" :extend t))
     (((class color) (background light))
      (:inherit variable-pitch
-               :background "#c0c0c0" :extend t)))
+               :background "#d0d0d0" :extend t)))
   "Face used for a section.")
 
 (defface shortdoc-example
@@ -88,6 +89,7 @@ There can be any number of :example/:result elements."
   (concat
    :example (concat "foo" "bar" "zot"))
   (string-join
+   :no-manual t
    :example (string-join '("foo" "bar" "zot") " "))
   (mapconcat
    :example (mapconcat (lambda (a) (concat "[" a "]"))
@@ -116,10 +118,13 @@ There can be any number of :example/:result elements."
    :no-manual t
    :example (string-trim-right "barkss" "s+"))
   (string-truncate-left
+   :no-manual t
    :example (string-truncate-left "longstring" 8))
   (string-remove-suffix
+   :no-manual t
    :example (string-remove-suffix "bar" "foobar"))
   (string-remove-prefix
+   :no-manual t
    :example (string-remove-prefix "foo" "foobar"))
   (reverse
    :example (reverse "foo"))
@@ -132,8 +137,10 @@ There can be any number of :example/:result elements."
    :example "(stringp ?a)"
    :result t)
   (string-empty-p
+   :no-manual t
    :example (string-empty-p ""))
   (string-blank-p
+   :no-manual t
    :example (string-blank-p " \n"))
   (string-lessp
    :example (string-lessp "foo" "bar"))
@@ -415,7 +422,6 @@ There can be any number of :example/:result elements."
   (process-live-p
    :example-no-result (process-live-p process)))
 
-;;;###autoload
 (defun shortdoc-display-group (group)
   "Pop to a buffer and display short documentation for functions in GROUP."
   (unless (assq group shortdoc--groups)
@@ -485,7 +491,6 @@ There can be any number of :example/:result elements."
       (put-text-property start (point) 'face 'shortdoc-example))
     (insert "\n")))
 
-;;;###autoload
 (defun shortdoc-function-groups (function)
   "Return all shortdoc groups FUNCTION appears in."
   (cl-loop for group in shortdoc--groups
