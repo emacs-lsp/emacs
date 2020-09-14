@@ -520,18 +520,21 @@ Conditions are:
 (defun icomplete--vertical-prospects (match-braket prefix most _determ comps)
   "List of vertical completions limited."
   ;; Max total rows to use, including the minibuffer content.
-  (let ((prefix-len (and (stringp prefix)
-                         ;; Only hide the prefix if the corresponding info
-                         ;; is already displayed via `most'.
-                         (string-prefix-p prefix most t)
-                         (length prefix)))
-        (prospects-rows (+ 1 (cl-count ?\n match-braket))) ;; prompt + row new line around match
-        (prospects-max-rows (cond ((floatp max-mini-window-height)
-			           (floor (* (frame-height) max-mini-window-height)))
-			          ((integerp max-mini-window-height)
-			           max-mini-window-height)
-			          (t icomplete-prospects-height)))
-        limit prospects comp)
+  (let* ((prefix-len (and (stringp prefix)
+                          ;; Only hide the prefix if the corresponding info
+                          ;; is already displayed via `most'.
+                          (string-prefix-p prefix most t)
+                          (length prefix)))
+         (line-height (line-pixel-height))
+         (prospects-max-height (cond ((floatp max-mini-window-height)
+			              (floor (* max-mini-window-height (frame-pixel-height))))
+			             ((integerp max-mini-window-height)
+			              (floor (* max-mini-window-height line-height)))
+			             (t
+                                      (* icomplete-prospects-height line-height))))
+         ;; prompt + row new line around match
+         (prospects-rows-pixel (* (1+ (cl-count ?\n match-braket)) line-height))
+         limit prospects comp)
 
     ;; First candidate
     (when (and prefix-len
@@ -539,16 +542,15 @@ Conditions are:
       (push (substring (car comps) prefix-len) prospects)
 
       (setq comps (cdr comps)
-            prospects-rows (1+ prospects-rows)))
+            prospects-rows-pixel (+ prospects-rows-pixel line-height)))
 
     ;; The others
     (while (and comps (not limit))
       (setq comp (car comps)
             comps (cdr comps))
+      (setq prospects-rows-pixel (+ prospects-rows-pixel line-height))
 
-      (setq prospects-rows (1+ prospects-rows))
-
-      (if (< prospects-rows prospects-max-rows)
+      (if (< prospects-rows-pixel prospects-max-height)
 	  (push comp prospects)
         (push icomplete-ellipsis prospects)
 	(setq limit t)))
