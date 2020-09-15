@@ -111,7 +111,7 @@ Otherwise this should be a list of the completion tables (e.g.,
   :type 'integer
   :version "26.1")
 
-(defcustom icomplete-compute-delay .3
+(defcustom icomplete-compute-delay 0.2
   "Completions-computation stall, used only with large-number completions.
 See `icomplete-delay-completions-threshold'."
   :type 'number)
@@ -124,10 +124,10 @@ See `icomplete-delay-completions-threshold'."
   "Maximum number of initial chars to apply `icomplete-compute-delay'."
   :type 'integer)
 
-(defvar icomplete-in-buffer nil
-  "If non-nil, also use Icomplete when completing in non-mini buffers.")
-
-(defvar icomplete-ellipsis nil)
+(defcustom icomplete-in-buffer nil
+  "If non-nil, also use Icomplete when completing in non-mini buffers."
+  :type 'boolean
+  :version "28.1")
 
 (defcustom icomplete--minibuffer-setup-hook nil
   "Icomplete-specific customization of minibuffer setup.
@@ -164,31 +164,34 @@ return a string."
                 (const :tag "None" nil))
   :version "28.1")
 
-(defvar icomplete--separator nil
+(defvar-local icomplete-ellipsis nil
+  "Ellipsis symbol to indicate continuation.")
+
+(defvar-local icomplete--separator nil
   "If there are multiple possibilities this separates them.")
 
-(defvar icomplete--list-indicators nil
+(defvar-local icomplete--list-indicators nil
   "Indicator for when multiple prospects are available.
 means that further input is required to distinguish a single one")
 
-(defvar icomplete--require-indicators nil
+(defvar-local icomplete--require-indicators nil
   "Indicator for when matching is enforced.
 This is used when a single prospect is identified and is
 initialized in icomplete--minibuffer-setup")
 
-(defvar icomplete--not-require-indicators nil
+(defvar-local icomplete--not-require-indicators nil
   "Indicator for when matching is optional.
 This is used when a single prospect is identified and is
 initialized in icomplete--minibuffer-setup")
 
-(defvar icomplete--last-format nil)
-(defvar icomplete--prospects nil)
-(defvar icomplete--rows nil)
+(defvar-local icomplete--last-format nil)
+(defvar-local icomplete--prospects nil)
+(defvar-local icomplete--rows nil)
 ;;;_* Initialization
 
 ;;;_ + Internal Variables
 ;;;_  = icomplete-eoinput nil
-(defvar icomplete-overlay (make-overlay (point-min) (point-min) nil t t)
+(defvar-local icomplete-overlay (make-overlay (point-min) (point-min) nil t t)
   "Overlay used to display the list of completions.")
 
 (defun icomplete-pre-command-hook ()
@@ -903,9 +906,9 @@ minibuffer completion."
              ;; a prefix of most, or something else.
 	     (compare (compare-strings name nil nil
 				       most nil nil completion-ignore-case))
-	     (determ (unless (or (eq t compare) (eq t most-try)
-				 (= (setq compare (1- (abs compare)))
-				    (length most)))
+	     (determ (unless (or (eq t compare)
+                                 (eq t most-try)
+				 (= (setq compare (1- (abs compare))) (length most)))
                        (format match-braket
                                (cond
 				((= compare (length name))
