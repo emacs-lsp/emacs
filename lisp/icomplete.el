@@ -516,6 +516,20 @@ Conditions are:
     map)
   "Keymap used by `fido-mode' and `icomplete-mode' in `icomplete-vertical-mode'.")
 
+(defun icomplete--vertical-get-max-height ()
+  (let ((minibuffer-parameter (frame-parameter nil 'minibuffer)))
+    (cond
+     ((eq minibuffer-parameter t)
+      (cond ((floatp max-mini-window-height)
+	     (floor (* max-mini-window-height (frame-pixel-height))))
+	    ((integerp max-mini-window-height)
+	     (floor (* max-mini-window-height line-height)))
+	    (t
+             (* icomplete-prospects-height line-height))))
+     ((eq minibuffer-parameter 'only)
+      (frame-pixel-height))
+     ;; TODO: minibuffer-parameter can also be a window or a frame; Add conditions framep and windowp
+     )))
 
 (defun icomplete--vertical-prospects (match-braket prefix most _determ comps)
   "List of vertical completions limited."
@@ -526,12 +540,7 @@ Conditions are:
                           (string-prefix-p prefix most t)
                           (length prefix)))
          (line-height (line-pixel-height))
-         (prospects-max-height (cond ((floatp max-mini-window-height)
-			              (floor (* max-mini-window-height (frame-pixel-height))))
-			             ((integerp max-mini-window-height)
-			              (floor (* max-mini-window-height line-height)))
-			             (t
-                                      (* icomplete-prospects-height line-height))))
+         (prospects-max-height icomplete--vertical-get-max-height)
          ;; prompt + row new line around match
          (prospects-rows-pixel (* (1+ (cl-count ?\n match-braket)) line-height))
          limit prospects comp)
