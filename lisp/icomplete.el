@@ -546,18 +546,14 @@ Conditions are:
          limit prospects comp)
 
     ;; First candidate
-    (when (and prefix-len
-               icomplete-hide-common-prefix)
-      (push (substring (car comps) prefix-len) prospects)
-
-      (setq comps (cdr comps)
-            prospects-rows-pixel (+ prospects-rows-pixel line-height)))
+    (when (and comps prefix-len icomplete-hide-common-prefix)
+      (push (icomplete--format-function (substring (pop comps) prefix-len)) prospects)
+      (setq prospects-rows-pixel (+ prospects-rows-pixel line-height)))
 
     ;; The others
     (while (and comps (not limit))
-      (setq comp (car comps)
-            comps (cdr comps))
-      (setq prospects-rows-pixel (+ prospects-rows-pixel line-height))
+      (setq comp (icomplete--format-function (substring (pop comps) prefix-len))
+            prospects-rows-pixel (+ prospects-rows-pixel line-height))
 
       (if (< prospects-rows-pixel prospects-max-height)
 	  (push comp prospects)
@@ -614,6 +610,7 @@ Conditions are:
   "List of horizontal completions limited."
 
   (let* (;; Max total length to use, including the minibuffer content.
+         (separator-width (string-width icomplete--separator))
          (prefix-len (and (stringp prefix)
                           ;; Only hide the prefix if the corresponding info
                           ;; is already displayed via `most'.
@@ -631,11 +628,9 @@ Conditions are:
          limit prospects comp)
 
     (while (and comps (not limit))
-      (setq comp (substring (car comps) prefix-len)
-	    comps (cdr comps)
-            prospects-len (+ (string-width comp)
-	                     (string-width icomplete--separator)
-	                     prospects-len))
+      (setq comp (icomplete--format-function (substring (pop comps) prefix-len))
+            prospects-len (+ prospects-len (string-width comp) separator-width))
+
       (if (< prospects-len prospects-max-len)
 	  (push comp prospects)
         (push icomplete-ellipsis prospects)
@@ -972,8 +967,7 @@ minibuffer completion."
         (when last (setcdr last base-size))
 	(if (or first prospects)
             (format (concat determ first icomplete--separator icomplete--list-indicators)
-                    (mapconcat
-                     #'icomplete--format-function prospects icomplete--separator))
+                    (mapconcat #'identity prospects icomplete--separator))
 	  (concat determ " [Matched]"))))))
 
 ;;; Iswitchb compatibility
