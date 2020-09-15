@@ -150,7 +150,6 @@ icompletion is occurring."
                  (const vertical))
   :version "28.1")
 
-
 (defcustom icomplete-item-format nil
   "Format to use in every completion item.
 
@@ -164,7 +163,7 @@ return a string."
                 (const :tag "None" nil))
   :version "28.1")
 
-(defvar-local icomplete-ellipsis nil
+(defvar-local icomplete--ellipsis nil
   "Ellipsis symbol to indicate continuation.")
 
 (defvar-local icomplete--separator nil
@@ -187,6 +186,8 @@ initialized in icomplete--minibuffer-setup")
 (defvar-local icomplete--last-format nil)
 (defvar-local icomplete--prospects nil)
 (defvar-local icomplete--rows nil)
+(defvar-local icomplete--match-braket nil)
+
 ;;;_* Initialization
 
 ;;;_ + Internal Variables
@@ -536,7 +537,7 @@ Conditions are:
      ;; TODO: minibuffer-parameter can also be a window or a frame; Add conditions framep and windowp
      )))
 
-(defun icomplete--vertical-prospects (match-braket prefix most _determ comps)
+(defun icomplete--vertical-prospects (prefix most _determ comps)
   "List of vertical completions limited."
   ;; Max total rows to use, including the minibuffer content.
   (let* ((prefix-len (and (stringp prefix)
@@ -547,7 +548,7 @@ Conditions are:
          (line-height (line-pixel-height))
          (prospects-max-height (icomplete--vertical-get-max-height line-height))
          ;; prompt + row new line around match
-         (prospects-rows-pixel (* (1+ (cl-count ?\n match-braket)) line-height))
+         (prospects-rows-pixel (* (1+ (cl-count ?\n icomplete--match-braket)) line-height))
          limit prospects comp)
 
     ;; First candidate
@@ -562,7 +563,7 @@ Conditions are:
 
       (if (< prospects-rows-pixel prospects-max-height)
 	  (push comp prospects)
-        (push icomplete-ellipsis prospects)
+        (push icomplete--ellipsis prospects)
 	(setq limit t)))
     (nreverse prospects)))
 
@@ -611,7 +612,7 @@ Conditions are:
     map)
   "Keymap used by `fido-mode' and `icomplete-mode' unless `icomplete-vertical-mode'.")
 
-(defun icomplete--horizontal-prospects (match-braket prefix most determ comps)
+(defun icomplete--horizontal-prospects (prefix most determ comps)
   "List of horizontal completions limited."
 
   (let* (;; Max total length to use, including the minibuffer content.
@@ -621,9 +622,9 @@ Conditions are:
                           ;; is already displayed via `most'.
                           (string-prefix-p prefix most t)
                           (string-width prefix)))
-         (prospects-len (+ (string-width (or determ (format match-braket "")))
+         (prospects-len (+ (string-width (or determ (format icomplete--match-braket "")))
 			   (string-width icomplete--separator)
-			   (+ 2 (string-width icomplete-ellipsis)) ;; take {…} into account
+			   (+ 2 (string-width icomplete--ellipsis)) ;; take {…} into account
 			   (string-width (buffer-string))))
          (prospects-max-len (* (+ icomplete-prospects-height
                                   ;; If the minibuffer content already uses up more than
@@ -638,7 +639,7 @@ Conditions are:
 
       (if (< prospects-len prospects-max-len)
 	  (push comp prospects)
-        (push icomplete-ellipsis prospects)
+        (push icomplete--ellipsis prospects)
 	(setq limit t)))
     (nreverse prospects)))
 
@@ -881,16 +882,18 @@ minibuffer completion."
 	 (comps (icomplete--sorted-completions))
          (last (if (consp comps) (last comps)))
          (base-size (cdr last))
-         (match-braket (if require-match
-                           icomplete--require-indicators
-                         icomplete--not-require-indicators)))
+         )
+
+    (setq icomplete--match-braket (if require-match
+                                      icomplete--require-indicators
+                                    icomplete--not-require-indicators))
     ;; `concat'/`mapconcat' is the slow part.
-    (unless icomplete-ellipsis
-      (setq icomplete-ellipsis (if (char-displayable-p ?…) "…" "...")))
+    (unless icomplete--ellipsis
+      (setq icomplete--ellipsis (if (char-displayable-p ?…) "…" "...")))
 
     (if (not (consp comps))
 	(progn ;;(debug (format "Candidates=%S field=%S" candidates name))
-          (format match-braket "No matches"))
+          (format icomplete--match-braket "No matches"))
       (if last (setcdr last nil))
       (let* ((most-try
               (if (and base-size (> base-size 0))
@@ -909,17 +912,17 @@ minibuffer completion."
 	     (determ (unless (or (eq t compare)
                                  (eq t most-try)
 				 (= (setq compare (1- (abs compare))) (length most)))
-                       (format match-braket
+                       (format icomplete--match-braket
                                (cond
 				((= compare (length name))
                                  ;; Typical case: name is a prefix.
 				 (substring most compare))
                                 ;; Don't bother truncating if it doesn't gain
                                 ;; us at least 2 columns.
-				((< compare (+ 2 (string-width icomplete-ellipsis)))
+				((< compare (+ 2 (string-width icomplete--ellipsis)))
                                  most)
 				(t
-                                 (concat icomplete-ellipsis (substring most compare)))))))
+                                 (concat icomplete--ellipsis (substring most compare)))))))
 
              ;; Find the common prefix among `comps'.
              ;; We can't use the optimization below because its assumptions
@@ -953,10 +956,10 @@ minibuffer completion."
 	    ;; To circumvent all the above problems, provide a visual
 	    ;; cue to the user via an "empty string" in the try
 	    ;; completion field.
-	    (setq determ (format match-braket "" )))
+	    (setq determ (format icomplete--match-braket "" )))
 	  ;; Compute prospects for display.
 	  (setq prospects
-                (funcall icomplete--prospects match-braket prefix most determ comps)))
+                (funcall icomplete--prospects prefix most determ comps)))
 
         ;; Return the first match if the user hits enter.
         (when icomplete-show-matches-on-no-input
