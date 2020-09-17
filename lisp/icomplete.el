@@ -464,13 +464,17 @@ completions:
          (md (completion--field-metadata beg)))
     (alist-get 'category (cdr md))))
 
-(defun icomplete--format-function (item)
-  (cond
-   ((stringp icomplete-item-format)
-    (format icomplete-item-format item))
-   ((functionp icomplete-item-format)
-    (funcall icomplete-item-format item))
-   (t item)))
+(defun icomplete--format-function (item &optional from)
+  "Function to format candidates ITEM.
+
+FROM is passed straight to substring function"
+  (let ((subitem (substring item from)))
+    (cond
+     ((stringp icomplete-item-format)
+      (format icomplete-item-format subitem))
+     ((functionp icomplete-item-format)
+      (funcall icomplete-item-format subitem))
+     (t subitem))))
 
 ;;;_ > icomplete-simple-completing-p ()
 (defun icomplete-simple-completing-p ()
@@ -545,7 +549,9 @@ Conditions are:
                           ;; is already displayed via `most'.
                           (string-prefix-p prefix most t)
                           (length prefix)))
+         (prefix-items-len (and icomplete-hide-common-prefix prefix-len))
          (line-height (line-pixel-height))
+         ;; Height is calculated in pixels to avoid issues with some fonts.
          (prospects-max-height (icomplete--vertical-get-max-height line-height))
          ;; prompt + row new line around match
          (prospects-rows-pixel (* (1+ (cl-count ?\n icomplete--match-braket)) line-height))
@@ -553,14 +559,12 @@ Conditions are:
 
     ;; First candidate
     (when (and comps prefix-len)
-      (push (icomplete--format-function (substring (pop comps) prefix-len)) prospects)
+      (push (icomplete--format-function (pop comps) prefix-len) prospects)
       (setq prospects-rows-pixel (+ prospects-rows-pixel line-height)))
 
     ;; The others
     (while (and comps (not limit))
-      (setq comp (icomplete--format-function (if icomplete-hide-common-prefix
-                                                 (substring (pop comps) prefix-len)
-                                               (pop comps)))
+      (setq comp (icomplete--format-function (pop comps) prefix-items-len)
             prospects-rows-pixel (+ prospects-rows-pixel line-height))
 
       (if (< prospects-rows-pixel prospects-max-height)
@@ -619,7 +623,8 @@ Conditions are:
 
   (let* (;; Max total length to use, including the minibuffer content.
          (separator-width (string-width icomplete--separator))
-         (prefix-len (and (stringp prefix)
+         (prefix-len (and icomplete-hide-common-prefix
+                          (stringp prefix)
                           ;; Only hide the prefix if the corresponding info
                           ;; is already displayed via `most'.
                           (string-prefix-p prefix most t)
@@ -636,7 +641,7 @@ Conditions are:
          limit prospects comp)
 
     (while (and comps (not limit))
-      (setq comp (icomplete--format-function (substring (pop comps) prefix-len))
+      (setq comp (icomplete--format-function (pop comps) prefix-len)
             prospects-len (+ prospects-len (string-width comp) separator-width))
 
       (if (< prospects-len prospects-max-len)
