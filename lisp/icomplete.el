@@ -552,13 +552,15 @@ Conditions are:
          limit prospects comp)
 
     ;; First candidate
-    (when (and comps prefix-len icomplete-hide-common-prefix)
+    (when (and comps prefix-len)
       (push (icomplete--format-function (substring (pop comps) prefix-len)) prospects)
       (setq prospects-rows-pixel (+ prospects-rows-pixel line-height)))
 
     ;; The others
     (while (and comps (not limit))
-      (setq comp (icomplete--format-function (substring (pop comps) prefix-len))
+      (setq comp (icomplete--format-function (if icomplete-hide-common-prefix
+                                                 (substring (pop comps) prefix-len)
+                                               (pop comps)))
             prospects-rows-pixel (+ prospects-rows-pixel line-height))
 
       (if (< prospects-rows-pixel prospects-max-height)
