@@ -974,8 +974,9 @@ minibuffer completion."
         ;; is cached.
         (when last (setcdr last base-size))
 	(if (or first prospects)
-            (format (concat determ first icomplete--separator icomplete--list-indicators)
-                    (mapconcat #'identity prospects icomplete--separator))
+            (concat determ first icomplete--separator
+                    (format icomplete--list-indicators
+                            (mapconcat #'identity prospects icomplete--separator)))
 	  (concat determ " [Matched]"))))))
 
 ;;; Iswitchb compatibility
