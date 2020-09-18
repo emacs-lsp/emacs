@@ -526,16 +526,16 @@ Conditions are:
     map)
   "Keymap used by `fido-mode' and `icomplete-mode' in `icomplete-vertical-mode'.")
 
-(defun icomplete--vertical-get-max-height (line-height)
+(defun icomplete--vertical-get-max-height ()
   (let ((minibuffer-parameter (frame-parameter nil 'minibuffer)))
     (cond
      ((eq minibuffer-parameter t)
       (cond ((floatp max-mini-window-height)
 	     (floor (* max-mini-window-height (frame-pixel-height))))
 	    ((integerp max-mini-window-height)
-	     (floor (* max-mini-window-height line-height)))
+	     (floor (* max-mini-window-height (frame-char-height))))
 	    (t
-             (* icomplete-prospects-height line-height))))
+             (* icomplete-prospects-height (frame-char-height)))))
      ((eq minibuffer-parameter 'only)
       (frame-pixel-height))
      ;; TODO: minibuffer-parameter can also be a window or a frame; Add conditions framep and windowp
@@ -552,7 +552,7 @@ Conditions are:
          (prefix-items-len (and icomplete-hide-common-prefix prefix-len))
          (line-height (line-pixel-height))
          ;; Height is calculated in pixels to avoid issues with some fonts.
-         (prospects-max-height (icomplete--vertical-get-max-height line-height))
+         (prospects-max-height (icomplete--vertical-get-max-height))
          ;; prompt + row new line around match
          (prospects-rows-pixel (* (1+ (cl-count ?\n icomplete--match-braket)) line-height))
          limit prospects comp)
