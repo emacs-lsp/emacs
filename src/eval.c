@@ -1948,6 +1948,15 @@ then strings and vectors are not accepted.  */)
   else if (COMPILEDP (fun))
     return (PVSIZE (fun) > COMPILED_INTERACTIVE ? Qt : if_prop);
 
+#ifdef HAVE_MODULES
+  /* Module functions are interactive if their `interactive_form'
+     field is non-nil. */
+  else if (MODULE_FUNCTIONP (fun))
+    return NILP (module_function_interactive_form (XMODULE_FUNCTION (fun)))
+             ? if_prop
+             : Qt;
+#endif
+
   /* Strings and vectors are keyboard macros.  */
   if (STRINGP (fun) || VECTORP (fun))
     return (NILP (for_call_interactively) ? Qt : Qnil);
@@ -3960,7 +3969,7 @@ mark_specpdl (union specbinding *first, union specbinding *ptr)
 	  break;
 
 	case SPECPDL_UNWIND_ARRAY:
-	  mark_maybe_objects (pdl->unwind_array.array, pdl->unwind_array.nelts);
+	  mark_objects (pdl->unwind_array.array, pdl->unwind_array.nelts);
 	  break;
 
 	case SPECPDL_UNWIND_EXCURSION:
@@ -3974,8 +3983,7 @@ mark_specpdl (union specbinding *first, union specbinding *ptr)
 	    mark_object (backtrace_function (pdl));
 	    if (nargs == UNEVALLED)
 	      nargs = 1;
-	    while (nargs--)
-	      mark_object (backtrace_args (pdl)[nargs]);
+	    mark_objects (backtrace_args (pdl), nargs);
 	  }
 	  break;
 

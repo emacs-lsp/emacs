@@ -463,6 +463,7 @@ OPTION_DEFAULT_ON([m17n-flt],[don't use m17n-flt for text shaping])
 OPTION_DEFAULT_ON([toolkit-scroll-bars],[don't use Motif/Xaw3d/GTK toolkit scroll bars])
 OPTION_DEFAULT_ON([xaw3d],[don't use Xaw3d])
 OPTION_DEFAULT_ON([xim],[at runtime, default X11 XIM to off])
+OPTION_DEFAULT_ON([xdbe],[don't use X11 double buffering support])
 AC_ARG_WITH([ns],[AS_HELP_STRING([--with-ns],
 [use Nextstep (macOS Cocoa or GNUstep) windowing system.
 On by default on macOS.])],[],[with_ns=maybe])
@@ -723,7 +724,7 @@ case "${canonical}" in
   *-apple-darwin* )
     case "${canonical}" in
       *-apple-darwin[0-9].*) unported=yes ;;
-      i[3456]86-* | x86_64-* | arm-* )  ;;
+      i[3456]86-* | x86_64-* | arm-* | aarch64-* )  ;;
       * )            unported=yes ;;
     esac
     opsys=darwin
@@ -784,10 +785,7 @@ case "${canonical}" in
   *-nto-qnx* )
     opsys=qnxnto
     test -z "$CC" && CC=qcc
-    CFLAGS="$CFLAGS -D__NO_EXT_QNX"
-    if test "$with_unexec" = yes; then
-      LDFLAGS="-N2MB $LDFLAGS"
-    fi
+    LDFLAGS="-N2M $LDFLAGS"
   ;;
 
   ## Intel 386 machines where we don't care about the manufacturer.
@@ -1899,7 +1897,7 @@ tmp_CPPFLAGS="$CPPFLAGS"
 tmp_CFLAGS="$CFLAGS"
 CPPFLAGS="$CPPFLAGS -x objective-c"
 CFLAGS="$CFLAGS -x objective-c"
-GNU_OBJC_CFLAGS=
+GNU_OBJC_CFLAGS=""
 LIBS_GNUSTEP=
 if test "${with_ns}" != no; then
   # macfont.o requires macuvs.h which is absent after 'make extraclean',
@@ -1915,7 +1913,7 @@ if test "${with_ns}" != no; then
   elif flags=$( (gnustep-config --objc-flags) 2>/dev/null); then
      NS_IMPL_GNUSTEP=yes
      NS_GNUSTEP_CONFIG=yes
-     GNU_OBJC_CFLAGS=$flags
+     GNU_OBJC_CFLAGS="$flags"
      LIBS_GNUSTEP=$(gnustep-config --gui-libs) || exit
   elif test -f $GNUSTEP_CONFIG_FILE; then
      NS_IMPL_GNUSTEP=yes
@@ -1960,7 +1958,7 @@ fail;
        dnl _NATIVE_OBJC_EXCEPTIONS is used by the GNUstep headers.
        AC_DEFINE(_NATIVE_OBJC_EXCEPTIONS, 1,
          [Define if GNUstep uses ObjC exceptions.])
-       GNU_OBJC_CFLAGS="-fobjc-exceptions"
+       GNU_OBJC_CFLAGS="$GNU_OBJC_CFLAGS -fobjc-exceptions"
      fi
   fi
   if test $NS_IMPL_GNUSTEP = yes; then
@@ -2065,6 +2063,20 @@ if test "${HAVE_NS}" = yes; then
     AC_DEFINE(NATIVE_OBJC_INSTANCETYPE, 1,
               [Define if ObjC compiler supports instancetype natively.])
   fi
+
+  AC_CACHE_CHECK(
+    [if the Objective C compiler defaults to C99],
+    [emacs_cv_objc_c99],
+    [AC_LANG_PUSH([Objective C])
+     AC_COMPILE_IFELSE(
+       [AC_LANG_PROGRAM([], [[for (int i = 0;;);]])],
+       emacs_cv_objc_c99=yes,
+       emacs_cv_objc_c99=no)
+     AC_LANG_POP([Objective C])])
+
+   if test x$emacs_cv_objc_c99 = xno ; then
+     GNU_OBJC_CFLAGS="$GNU_OBJC_CFLAGS -std=c99"
+   fi
 fi
 
 HAVE_W32=no
@@ -4023,11 +4035,13 @@ AC_SUBST(XFIXES_LIBS)
 ### Use Xdbe (-lXdbe) if available
 HAVE_XDBE=no
 if test "${HAVE_X11}" = "yes"; then
-  AC_CHECK_HEADER(X11/extensions/Xdbe.h,
-    [AC_CHECK_LIB(Xext, XdbeAllocateBackBufferName, HAVE_XDBE=yes)],
-    [],
-    [#include <X11/Xlib.h>
-    ])
+  if test "${with_xdbe}" != "no"; then
+    AC_CHECK_HEADER(X11/extensions/Xdbe.h,
+      [AC_CHECK_LIB(Xext, XdbeAllocateBackBufferName, HAVE_XDBE=yes)],
+      [],
+      [#include <X11/Xlib.h>
+      ])
+  fi
   if test $HAVE_XDBE = yes; then
     XDBE_LIBS=-lXext
   fi

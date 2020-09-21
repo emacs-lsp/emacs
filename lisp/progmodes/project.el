@@ -1,7 +1,7 @@
 ;;; project.el --- Operations on the current project  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2015-2020 Free Software Foundation, Inc.
-;; Version: 0.5.1
+;; Version: 0.5.2
 ;; Package-Requires: ((emacs "26.3") (xref "1.0.2"))
 
 ;; This is a GNU ELPA :core package.  Avoid using functionality that
@@ -581,6 +581,8 @@ DIRS must contain directory names."
 ;;;###autoload
 (defvar project-prefix-map
   (let ((map (make-sparse-keymap)))
+    (define-key map "!" 'project-shell-command)
+    (define-key map "&" 'project-async-shell-command)
     (define-key map "f" 'project-find-file)
     (define-key map "F" 'project-or-external-find-file)
     (define-key map "b" 'project-switch-to-buffer)
@@ -665,7 +667,9 @@ The following commands are available:
   (interactive)
   (project--other-place-command '((display-buffer-in-new-tab))))
 
-;;;###autoload (define-key tab-prefix-map "p" #'project-other-tab-command)
+;;;###autoload
+(when (bound-and-true-p tab-prefix-map)
+  (define-key tab-prefix-map "p" #'project-other-tab-command))
 
 (declare-function grep-read-files "grep")
 (declare-function xref--show-xrefs "xref")
@@ -882,6 +886,20 @@ if one already exists."
         (pop-to-buffer eshell-buffer)
       (eshell t))))
 
+;;;###autoload
+(defun project-async-shell-command ()
+  "Run `async-shell-command' in the current project's root directory."
+  (interactive)
+  (let ((default-directory (project-root (project-current t))))
+    (call-interactively #'async-shell-command)))
+
+;;;###autoload
+(defun project-shell-command ()
+  "Run `shell-command' in the current project's root directory."
+  (interactive)
+  (let ((default-directory (project-root (project-current t))))
+    (call-interactively #'shell-command)))
+
 (declare-function fileloop-continue "fileloop" ())
 
 ;;;###autoload
@@ -1003,7 +1021,7 @@ Each condition is either:
   The car can be one of the following:
   * `major-mode': the buffer is killed if the buffer's major
     mode is eq to the cons-cell's cdr
-  * `defived-mode': the buffer is killed if the buffer's major
+  * `derived-mode': the buffer is killed if the buffer's major
     mode is derived from the major mode denoted by the cons-cell's
     cdr
   * `not': the cdr is interpreted as a negation of a condition.
@@ -1087,7 +1105,7 @@ identical.  Only the buffers that match a condition in
 `project-kill-buffer-conditions' will be killed.  If NO-CONFIRM
 is non-nil, the command will not ask the user for confirmation.
 NO-CONFIRM is always nil when the command is invoked
-interactivly."
+interactively."
   (interactive)
   (let* ((pr (project-current t))
          (bufs (project--buffers-to-kill pr)))
