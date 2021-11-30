@@ -695,6 +695,8 @@ yield_callback (void *ignore)
 
   release_global_lock ();
   sys_thread_yield ();
+
+
   acquire_global_lock (self);
 }
 

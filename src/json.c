@@ -968,11 +968,13 @@ usage: (json-parse-string STRING &rest ARGS) */)
 
   Lisp_Object string = args[0];
   CHECK_STRING (string);
-  Lisp_Object encoded = json_encode (string);
-  check_string_without_embedded_nulls (encoded);
+
   struct json_configuration conf =
     {json_object_hashtable, json_array_array, QCnull, QCfalse};
   json_parse_args (nargs - 1, args + 1, &conf, true);
+
+  Lisp_Object encoded = json_encode (string);
+  check_string_without_embedded_nulls (encoded);
 
   json_error_t error;
   json_t *object
@@ -1016,11 +1018,29 @@ json_read_buffer_callback (void *buffer, size_t buflen, void *data)
   return count;
 }
 
-static void
-release_callback (void *ignore)
+struct json_parse_param
 {
+  struct json_read_buffer_data* data;
+  json_error_t* error;
+  json_t * result;
+};
+
+
+static void
+release_callback (void * arg)
+{
+  struct json_parse_param *j = arg;
+  struct thread_state *self = current_thread;
+
   release_global_lock ();
   sys_thread_yield ();
+
+  j->result
+    = json_load_callback (json_read_buffer_callback, j->data,
+                          JSON_DECODE_ANY | JSON_DISABLE_EOF_CHECK,
+                          j->error);
+
+  acquire_global_lock (self);
 }
 
 
@@ -1080,16 +1100,11 @@ usage: (json-parse-buffer &rest args) */)
   json_error_t error;
   message1("Start!");
 
-  struct thread_state *self = current_thread;
+  struct json_parse_param j = {.data = &data, .error = &error};
 
-  flush_stack_call_func (release_callback, NULL);
+  flush_stack_call_func (release_callback, &j);
 
-  json_t *object
-    = json_load_callback (json_read_buffer_callback, &data,
-                          JSON_DECODE_ANY | JSON_DISABLE_EOF_CHECK,
-                          &error);
-
-  acquire_global_lock (self);
+  json_t *object = j.result;
 
   message1("End!");
 
