@@ -27,6 +27,7 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #include <jansson.h>
 
 #include "lisp.h"
+#include "thread.h"
 #include "buffer.h"
 #include "coding.h"
 
@@ -1015,6 +1016,14 @@ json_read_buffer_callback (void *buffer, size_t buflen, void *data)
   return count;
 }
 
+static void
+release_callback (void *ignore)
+{
+  release_global_lock ();
+  sys_thread_yield ();
+}
+
+
 DEFUN ("json-parse-buffer", Fjson_parse_buffer, Sjson_parse_buffer,
        0, MANY, NULL,
        doc: /* Read JSON object from current buffer starting at point.
@@ -1069,10 +1078,20 @@ usage: (json-parse-buffer &rest args) */)
   ptrdiff_t point = PT_BYTE;
   struct json_read_buffer_data data = {.point = point};
   json_error_t error;
+  message1("Start!");
+
+  struct thread_state *self = current_thread;
+
+  flush_stack_call_func (release_callback, NULL);
+
   json_t *object
     = json_load_callback (json_read_buffer_callback, &data,
                           JSON_DECODE_ANY | JSON_DISABLE_EOF_CHECK,
                           &error);
+
+  acquire_global_lock (self);
+
+  message1("End!");
 
   if (object == NULL)
     json_parse_error (&error);
