@@ -923,6 +923,61 @@ json_to_lisp (json_t *json, const struct json_configuration *conf)
   emacs_abort ();
 }
 
+struct json_parse_string_param
+{
+  char* data;
+  json_error_t* error;
+  json_t * result;
+};
+
+static void
+json_parse_string_callback (void * arg)
+{
+  struct json_parse_string_param *param = arg;
+  struct thread_state *self = current_thread;
+
+  release_global_lock ();
+  sys_thread_yield ();
+
+  param->result = json_loads (param->data, JSON_DECODE_ANY, param->error);
+
+  acquire_global_lock (self);
+}
+
+DEFUN ("json-rpc-string", Fjson_rpc_string, Sjson_rpc_string, 1, MANY,
+       NULL,
+       doc: /* */)
+  (ptrdiff_t nargs, Lisp_Object *args)
+{
+  ptrdiff_t count = SPECPDL_INDEX ();
+
+  Lisp_Object string = args[0];
+  CHECK_STRING (string);
+
+  struct json_configuration conf =
+    {json_object_hashtable, json_array_array, QCnull, QCfalse};
+  json_parse_args (nargs - 1, args + 1, &conf, true);
+
+  Lisp_Object encoded = json_encode (string);
+  check_string_without_embedded_nulls (encoded);
+
+  json_error_t error;
+  struct json_parse_string_param j = {.data = SSDATA (encoded), .error = &error};
+
+  flush_stack_call_func (json_parse_string_callback, &j);
+
+  json_t *object = j.result;
+
+  if (object == NULL)
+    json_parse_error (&error);
+
+  /* Avoid leaking the object in case of further errors.  */
+  if (object != NULL)
+    record_unwind_protect_ptr (json_release_object, object);
+
+  return unbind_to (count, json_to_lisp (object, &conf));
+}
+
 DEFUN ("json-parse-string", Fjson_parse_string, Sjson_parse_string, 1, MANY,
        NULL,
        doc: /* Parse the JSON STRING into a Lisp object.
@@ -977,8 +1032,12 @@ usage: (json-parse-string STRING &rest ARGS) */)
   check_string_without_embedded_nulls (encoded);
 
   json_error_t error;
-  json_t *object
-    = json_loads (SSDATA (encoded), JSON_DECODE_ANY, &error);
+  struct json_parse_string_param j = {.data = SSDATA (encoded), .error = &error};
+
+  flush_stack_call_func (json_parse_string_callback, &j);
+
+  json_t *object = j.result;
+
   if (object == NULL)
     json_parse_error (&error);
 
@@ -1024,7 +1083,6 @@ struct json_parse_param
   json_error_t* error;
   json_t * result;
 };
-
 
 static void
 release_callback (void * arg)
@@ -1188,5 +1246,6 @@ syms_of_json (void)
   defsubr (&Sjson_serialize);
   defsubr (&Sjson_insert);
   defsubr (&Sjson_parse_string);
+  defsubr (&Sjson_rpc_string);
   defsubr (&Sjson_parse_buffer);
 }
