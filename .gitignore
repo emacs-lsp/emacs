@@ -315,6 +315,7 @@ nt/emacs.rc
 nt/emacsclient.rc
 src/gdb.ini
 /var/
+launch.json
 
 # Seccomp filter files.
 lib-src/seccomp-filter.bpf

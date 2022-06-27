@@ -22,15 +22,23 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #include <errno.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #include <jansson.h>
+#include <string.h>
 
 #include "lisp.h"
+#include "intervals.h"
+#include "spsupr.h"
+#include "thread.h"
 #include "buffer.h"
 #include "coding.h"
+#include "spsupr.c"
 
 #define JSON_HAS_ERROR_CODE (JANSSON_VERSION_HEX >= 0x020B00)
+
+const int BUFFER_SIZE = 1000;
 
 #ifdef WINDOWSNT
 # include <windows.h>
@@ -986,6 +994,327 @@ usage: (json-parse-string STRING &rest ARGS) */)
   return unbind_to (count, json_to_lisp (object, &conf));
 }
 
+// JSONRPC
+
+#define ERROR_BUFFER_SIZE 1024 * 1024 * 4
+
+struct json_rpc_state
+{
+  struct SSP_Handle* handle;
+  json_t* message;
+  json_error_t error;
+  bool done;
+  char error_buffer[ERROR_BUFFER_SIZE + 1];
+  int error_buffer_read;
+};
+
+inline static void
+CHECK_RPC_CONNECTION (Lisp_Object obj)
+{
+  CHECK_TYPE (USER_PTRP (obj), Quser_ptrp, obj);
+}
+
+DEFUN ("json-rpc-connection", Fjson_rpc_connection, Sjson_rpc_connection, 1, MANY,
+       NULL,
+       doc: /* Create JSONRPC connection. */)
+  (ptrdiff_t nargs, Lisp_Object *args)
+{
+  USE_SAFE_ALLOCA;
+  char **new_argv;
+  SAFE_NALLOCA (new_argv, 1, nargs + 1);
+  new_argv[nargs] = NULL;
+
+  for (int i = 0; i < nargs; i++)
+    {
+      CHECK_STRING (args[i]);
+      new_argv[i] = SSDATA (args[i]);
+    }
+
+  struct SSP_Opts opts;
+  memset(&opts, 0, sizeof(opts));
+  opts.binary = new_argv[0];
+  opts.argv = new_argv;
+  opts.read_timeout_ms = -1;
+  struct SSP_Handle* handle = ssp_spawn(&opts);
+  if (!handle)
+    {
+      Fsignal (Qerror, list1 (build_string ("Failed to start process.")));
+    }
+  else
+    {
+      struct json_rpc_state *state = malloc (sizeof (struct json_rpc_state));
+      state->handle = handle;
+      SAFE_FREE ();
+      return make_user_ptr (json_free, state);
+    }
+}
+
+struct json_rpc_send_params
+{
+  struct SSP_Handle* handle;
+  json_t* message;
+};
+
+static void
+json_rpc_send_callback (void * arg)
+{
+  struct json_rpc_send_params *param = arg;
+  struct thread_state *self = current_thread;
+
+  release_global_lock ();
+  sys_thread_yield ();
+
+  struct SSP_Handle* process = param->handle;
+
+  char *string = json_dumps (param->message, JSON_COMPACT | JSON_ENCODE_ANY);
+  size_t size = strlen(string);
+  char *msg = malloc(size + 100);
+  sprintf(msg, "Content-Length: %zu\r\n\r\n%s", size, string);
+  process->send(process, msg, strlen(msg));
+  free(string);
+  free(msg);
+  acquire_global_lock (self);
+}
+
+static struct json_rpc_state * json_rpc_state(Lisp_Object connection) {
+  return XUSER_PTR (connection)->p;
+}
+
+DEFUN ("json-rpc-send", Fjson_rpc_send, Sjson_rpc_send, 1, MANY,
+       NULL,
+       doc: /* Send message to jsonrpc connection */)
+  (ptrdiff_t nargs, Lisp_Object *args)
+{
+  Lisp_Object connection = args[0];
+  CHECK_RPC_CONNECTION(connection);
+  struct SSP_Handle* handle = json_rpc_state(connection)->handle;
+
+  struct json_configuration conf =
+    {json_object_hashtable, json_array_array, QCnull, QCfalse};
+  json_parse_args (nargs - 2, args + 2, &conf, false);
+
+  json_t *message = lisp_to_json (args[1], &conf);
+
+  struct json_rpc_send_params params = {.message = message, .handle = handle};
+  flush_stack_call_func (json_rpc_send_callback, &params);
+  return Qnil;
+}
+
+DEFUN ("json-rpc-shutdown", Fjson_rpc_shutdown, Sjson_rpc_shutdown, 1, 1, 0,
+       doc: /* Shutdowns json rpc connection */)
+  (Lisp_Object connection)
+{
+  CHECK_RPC_CONNECTION(connection);
+  struct SSP_Handle* handle = json_rpc_state(connection)->handle;
+  handle->cancel_recv(handle);
+  return Qnil;
+}
+
+DEFUN ("json-rpc-pid", Fjson_rpc_pid, Sjson_rpc_pid, 1, 1, 0,
+       doc: /* Shutdowns json rpc connection */)
+  (Lisp_Object connection)
+{
+  CHECK_RPC_CONNECTION(connection);
+  struct SSP_Handle* handle = json_rpc_state(connection)->handle;
+  return make_int(handle->pid);
+}
+
+DEFUN ("json-rpc-stderr", Fjson_rpc_stderr, Sjson_rpc_stderr, 1, 1, 0,
+       doc: /* Shutdowns json rpc connection */)
+  (Lisp_Object connection)
+{
+  CHECK_RPC_CONNECTION(connection);
+  struct json_rpc_state* state = json_rpc_state(connection);
+  return make_string(state->error_buffer, state->error_buffer_read);
+}
+
+DEFUN ("json-rpc-alive-p", Fjson_rpc_alive_p, Sjson_rpc_alive_p, 1, 1, 0,
+       doc: /* Returns if json rpc connection is alive */)
+  (Lisp_Object connection)
+{
+  CHECK_RPC_CONNECTION(connection);
+  struct SSP_Handle* handle = json_rpc_state(connection)->handle;
+  return (handle->isalive(handle))? Qt : Qnil;
+}
+
+static size_t read_stdout (struct json_rpc_state *param, char *buffer,
+			   size_t size)
+{
+  struct SSP_Handle *handle = param->handle;
+  size_t result, read_res;
+  do
+    {
+      result = size;
+      size_t stderr_size = ERROR_BUFFER_SIZE - param->error_buffer_read;
+      read_res = handle->recv (handle, buffer, &result,
+			  param->error_buffer + param->error_buffer_read,
+			  &stderr_size);
+
+      if (stderr_size)
+	{
+	  param->error_buffer_read += stderr_size;
+	  if (param->error_buffer_read == ERROR_BUFFER_SIZE) {
+	    param->error_buffer_read = ERROR_BUFFER_SIZE / 2;
+	    strcpy(param->error_buffer, param->error_buffer + ERROR_BUFFER_SIZE / 2);
+	  }
+	}
+
+      if (result)
+	break;
+  } while (read_res > 0 || handle->isalive (handle));
+
+  return result;
+}
+
+static bool read_until (struct json_rpc_state *param, const char *needle,
+			char *output)
+{
+  // XXX: optimize the first read and make sure output is not
+  // overflowing
+  size_t bytes_read = 0;
+  int read = 0;
+  while (strstr (output, needle) == NULL)
+    {
+      bytes_read = read_stdout (param, output + read, 1);
+      if (bytes_read == 0)
+	return false;
+      read += bytes_read;
+    }
+  return true;
+}
+
+static void
+json_rpc_callback (void *arg)
+{
+  struct json_rpc_state *param = arg;
+  struct thread_state *self = current_thread;
+
+  release_global_lock ();
+  sys_thread_yield ();
+
+  char data[BUFFER_SIZE + 1];
+
+  memset (data, '\0', BUFFER_SIZE);
+  if (read_until (param, "Content-Length:", data))
+    {
+      memset (data, '\0', BUFFER_SIZE);
+
+      if (read_until (param, "\r\n\r\n", data))
+	{
+	  char *_end;
+	  const size_t content_length = strtol (data, &_end, 10);
+	  size_t has_to_read = content_length;
+	  char *msg = malloc (content_length + 1);
+	  while (has_to_read > 0)
+	    {
+	      int bytes_read
+		= read_stdout (param, msg + (content_length - has_to_read),
+			       has_to_read);
+	      if (bytes_read == 0)
+		{
+		  param->done = true;
+		  break;
+		}
+
+	      has_to_read -= bytes_read;
+	    }
+	  if (!param->done)
+	    {
+	      msg[content_length] = '\0';
+	      param->message = json_loads (msg, JSON_DECODE_ANY, &param->error);
+	      free (msg);
+	    }
+	}
+      else
+	{
+	  param->done = true;
+	}
+    }
+  else
+    {
+      param->done = true;
+    }
+
+  acquire_global_lock (self);
+}
+
+static Lisp_Object
+get_json_parse_error (const json_error_t *error)
+{
+  Lisp_Object symbol;
+#if JSON_HAS_ERROR_CODE
+  switch (json_error_code (error))
+    {
+    case json_error_premature_end_of_input:
+      symbol = Qjson_end_of_file;
+      break;
+    case json_error_end_of_input_expected:
+      symbol = Qjson_trailing_content;
+      break;
+    default:
+      symbol = Qjson_parse_error;
+      break;
+    }
+#else
+  if (json_has_suffix (error->text, "expected near end of file"))
+    symbol = Qjson_end_of_file;
+  else if (json_has_prefix (error->text, "end of file expected"))
+    symbol = Qjson_trailing_content;
+  else
+    symbol = Qjson_parse_error;
+#endif
+  return Fcons (symbol, list5 (build_string_from_utf8 (error->text),
+			       build_string_from_utf8 (error->source),
+			       INT_TO_INTEGER (error->line),
+			       INT_TO_INTEGER (error->column),
+			       INT_TO_INTEGER (error->position)));
+}
+
+DEFUN ("json-rpc", Fjson_rpc, Sjson_rpc, 1, MANY,
+       NULL,
+       doc: /* Runs json-rpc dispach loop over jsonrpc connection */)
+  (ptrdiff_t nargs, Lisp_Object *args)
+{
+  Lisp_Object connection = args[0];
+  CHECK_RPC_CONNECTION(connection);
+
+  Lisp_Object callback = args[1];
+
+  struct json_configuration conf =
+    {json_object_hashtable, json_array_array, QCnull, QCfalse};
+
+  json_parse_args (nargs - 2, args + 2, &conf, true);
+
+  struct json_rpc_state* param = json_rpc_state(connection);
+  struct SSP_Handle* handle = param->handle;
+
+  while (!param->done && handle->isalive(handle))
+    {
+      flush_stack_call_func (json_rpc_callback, param);
+
+      if (!param->done)
+	{
+	  if (param->message != NULL)
+	    {
+	      Lisp_Object msg = json_to_lisp (param->message, &conf);
+	      free (param->message);
+              param->message = NULL;
+	      CALLN (Ffuncall, callback, msg, Qnil, Qnil);
+	    }
+	  else
+	    {
+	      Lisp_Object error = get_json_parse_error(&param->error);
+	      CALLN (Ffuncall, callback, Qnil, error, Qnil);
+	    }
+	} else {
+      }
+    }
+  CALLN (Ffuncall, callback, Qnil, Qnil, Qt);
+  return Qnil;
+}
+
+// jsonrpc end
+
 struct json_read_buffer_data
 {
   /* Byte position of position to read the next chunk from.  */
@@ -1124,6 +1453,14 @@ syms_of_json (void)
 
   DEFSYM (Qjson_serialize, "json-serialize");
   DEFSYM (Qjson_parse_string, "json-parse-string");
+  DEFSYM (Qjson_rpc, "json-rpc");
+  DEFSYM (Qjson_rpc_connection, "json-rpc-connection");
+  DEFSYM (Qjson_rpc_shutdown, "json-rpc-shutdown");
+  DEFSYM (Qjson_rpc_send, "json-rpc-send");
+  DEFSYM (Qjson_rpc_alive_p, "json-rpc-alive-p");
+  DEFSYM (Qjson_rpc_pid, "json-rpc-pid");
+  DEFSYM (Qjson_rpc_close, "json-rpc-close");
+  DEFSYM (Qjson_rpc_stderr, "json-rpc-stderr");
   Fput (Qjson_serialize, Qpure, Qt);
   Fput (Qjson_serialize, Qside_effect_free, Qt);
   Fput (Qjson_parse_string, Qpure, Qt);
@@ -1140,5 +1477,12 @@ syms_of_json (void)
   defsubr (&Sjson_serialize);
   defsubr (&Sjson_insert);
   defsubr (&Sjson_parse_string);
+  defsubr (&Sjson_rpc);
+  defsubr (&Sjson_rpc_connection);
+  defsubr (&Sjson_rpc_send);
+  defsubr (&Sjson_rpc_shutdown);
+  defsubr (&Sjson_rpc_pid);
+  defsubr (&Sjson_rpc_stderr);
+  defsubr (&Sjson_rpc_alive_p);
   defsubr (&Sjson_parse_buffer);
 }
