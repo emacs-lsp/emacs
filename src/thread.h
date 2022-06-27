@@ -311,6 +311,8 @@ extern void finalize_one_thread (struct thread_state *state);
 extern void finalize_one_mutex (struct Lisp_Mutex *);
 extern void finalize_one_condvar (struct Lisp_CondVar *);
 extern void maybe_reacquire_global_lock (void);
+extern void release_global_lock (void);
+extern void acquire_global_lock (struct thread_state *);
 
 extern void init_threads (void);
 extern void syms_of_threads (void);
