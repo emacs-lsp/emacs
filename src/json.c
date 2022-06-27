@@ -22,15 +22,22 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #include <errno.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #include <jansson.h>
+#include <string.h>
 
 #include "lisp.h"
+#include "intervals.h"
+#include "subprocess.h"
+#include "thread.h"
 #include "buffer.h"
 #include "coding.h"
 
 #define JSON_HAS_ERROR_CODE (JANSSON_VERSION_HEX >= 0x020B00)
+
+const int BUFFER_SIZE = 10000000;
 
 #ifdef WINDOWSNT
 # include <windows.h>
@@ -922,6 +929,215 @@ json_to_lisp (json_t *json, const struct json_configuration *conf)
   emacs_abort ();
 }
 
+struct json_parse_string_param
+{
+  char* data;
+  json_error_t* error;
+  json_t * result;
+};
+
+static void
+json_parse_string_callback (void * arg)
+{
+  struct json_parse_string_param *param = arg;
+  struct thread_state *self = current_thread;
+
+  release_global_lock ();
+  sys_thread_yield ();
+
+  param->result = json_loads (param->data, JSON_DECODE_ANY, param->error);
+
+  acquire_global_lock (self);
+}
+
+DEFUN ("json-rpc-connection", Fjson_rpc_connection, Sjson_rpc_connection, 1, MANY,
+       NULL,
+       doc: /* */)
+  (ptrdiff_t nargs, Lisp_Object *args)
+{
+  Lisp_Object string = args[0];
+  CHECK_STRING (string);
+  Lisp_Object encoded = json_encode (string);
+  struct subprocess_s* process = malloc(sizeof(struct subprocess_s));;
+  /* const char *const commandLine[] = { "/bin/cat", "/tmp/msg.txt", 0 }; */
+  /* const char *const commandLine[] = {"/usr/bin/java", "-jar", "/home/yyoncho/.emacs.d/.cache/lsp/xmlls/org.eclipse.lemminx-0.18.0-uber.jar", 0 }; */
+  /* const char *const commandLine[] = {"/home/yyoncho/.emacs.d/.cache/lsp/clangd/clangd_13.0.0/bin/clangd", 0}; */
+  const char *const commandLine[] = {"/usr/bin/java", "-Declipse.application=org.eclipse.jdt.ls.core.id1", "-Dosgi.bundles.defaultStartLevel=4", "-Declipse.product=org.eclipse.jdt.ls.core.product", "-Dlog.protocol=true", "-Dlog.level=ALL", "-XX:+UseParallelGC", "-XX:GCTimeRatio=4", "-XX:AdaptiveSizePolicyWeight=90", "-Dsun.zip.disableMemoryMapping=true", "-Xmx1G", "-Xms100m", "-jar", "/home/yyoncho/.emacs.d/.cache/lsp/eclipse.jdt.ls/plugins/org.eclipse.equinox.launcher_1.6.400.v20210924-0641.jar", "-configuration", "/home/yyoncho/.emacs.d/.cache/lsp/eclipse.jdt.ls/config_linux", "-data", "/home/yyoncho/.emacs.d/workspace/", "--add-modules=ALL-SYSTEM", "--add-opens, java.base/java.util=ALL-UNNAMED", "--add-opens, java.base/java.lang=ALL-UNNAMED", 0};
+  /* const char *const commandLine[] = {"/home/yyoncho/.emacs.d/.cache/lsp/npm/typescript-language-server/bin/typescript-language-server", "--tsserver-path", "/home/yyoncho/.emacs.d/.cache/lsp/npm/typescript/bin/tsserver", "--stdio" ,0}; */
+  int code = subprocess_create(commandLine, subprocess_option_enable_async | subprocess_option_inherit_environment | subprocess_option_search_user_path ,
+    process);
+
+  return make_user_ptr(NULL, process);
+}
+
+
+DEFUN ("json-rpc-send", Fjson_rpc_send, Sjson_rpc_send, 1, MANY,
+       NULL,
+       doc: /* */)
+  (ptrdiff_t nargs, Lisp_Object *args)
+{
+  Lisp_Object connection = args[0];
+  struct subprocess_s* f = XUSER_PTR (connection)->p;
+
+  Lisp_Object string = args[1];
+  CHECK_STRING (string);
+
+  Lisp_Object encoded = json_encode (string);
+  char* data = SSDATA(encoded);
+  printf("Sending message\n\n %s \n\n", data );
+  fputs(data, subprocess_stdin(f));
+  fflush(subprocess_stdin(f));
+  return Qnil;
+}
+
+struct json_rpc_param
+{
+  struct subprocess_s* file;
+  json_t* messages[1000];
+  int messages_len;
+  json_error_t* errors[1000];
+  int index;
+  char* data;
+  bool done;
+};
+
+static void
+json_rpc_callback (void * arg)
+{
+  struct json_rpc_param *param = arg;
+  struct thread_state *self = current_thread;
+
+  release_global_lock ();
+  sys_thread_yield ();
+
+  printf("Callback start...\n");
+  struct subprocess_s* process = param->file;
+  param->messages_len = 0;
+
+  char* data = param->data;
+  for (;;)
+    {
+      unsigned bytes_read = 0;
+      bytes_read = subprocess_read_stdout (process, data + param->index,
+                                           BUFFER_SIZE - 2 - param->index);
+      param->index += bytes_read;
+      if (bytes_read == 0)
+        {
+          param->done = true;
+          printf("Callback finished...\n");
+	  break;
+        }
+      char *content_length_start;
+      char *content_length_end;
+      char *cursor = param->data;
+      while (
+        ((content_length_start = strstr (cursor, "Content-Length:"))
+         != NULL)
+        && ((content_length_end
+             = strstr (content_length_start, "\r\n\r\n"))
+            != NULL))
+        {
+          char *_end;
+          const long content_length
+            = strtol (content_length_start
+                        + strlen ("Content-Length:"),
+                      &_end, 10);
+
+          char *msg = malloc (content_length + 1);
+          size_t remaining = strlen (content_length_end + 4);
+          strncpy (msg, content_length_end + 4,
+                   content_length < remaining ? content_length
+                                              : remaining);
+          int has_to_read = content_length - remaining;
+          while (has_to_read > 0)
+            {
+              bytes_read
+                = subprocess_read_stdout (process,
+                                          msg
+                                            + (content_length
+                                               - has_to_read),
+                                          has_to_read);
+              has_to_read -= bytes_read;
+            }
+
+          msg[content_length] = '\0';
+          /* printf ("received message: \n\n%s\n", msg); */
+          printf ("received message: len = %lu\n", strlen(msg));
+          param->messages[param->messages_len]
+            = json_loads (msg, JSON_DECODE_ANY,
+                          param->errors[param->messages_len]);
+          param->messages_len++;
+          free(msg);
+
+          cursor = content_length_end + 4 + content_length;
+        }
+
+      param->index = strlen (cursor);
+      strncpy (data, cursor, param->index);
+      data[param->index] = '\0';
+      memset (data + param->index, 0, BUFFER_SIZE - param->index - 1);
+      if (param->messages_len != 0) {
+break;
+      }
+    }
+
+  printf ("sending %d messages:\n", param->messages_len );
+
+  acquire_global_lock (self);
+}
+
+
+DEFUN ("json-rpc", Fjson_rpc, Sjson_rpc, 1, MANY,
+       NULL,
+       doc: /* */)
+  (ptrdiff_t nargs, Lisp_Object *args)
+{
+  printf("Staring json RCP...\n");
+
+  Lisp_Object connection = args[0];
+  struct subprocess_s* f = XUSER_PTR (connection)->p;
+
+  Lisp_Object callback = args[1];
+
+  struct json_configuration conf =
+    {json_object_hashtable, json_array_array, QCnull, QCfalse};
+
+  json_parse_args (nargs - 2, args + 2, &conf, true);
+
+  struct json_rpc_param rpc_param = {.file = f, .index = 0, .data = malloc(BUFFER_SIZE)};
+
+  while (!rpc_param.done)
+    {
+      flush_stack_call_func (json_rpc_callback, &rpc_param);
+
+      if (!rpc_param.done)
+	{
+	  /* record_unwind_protect_ptr (json_release_object,
+	   * rpc_param.messages); */
+
+	  printf ("Received %d messages... \n", rpc_param.messages_len);
+	  for (int i = 0; i < rpc_param.messages_len; ++i)
+	    {
+	      printf ("Sending message to UI thread (%d)\n", i);
+	      if (rpc_param.messages[i] != NULL)
+		{
+		  Lisp_Object lisp
+		    = json_to_lisp (rpc_param.messages[i], &conf);
+		  free (rpc_param.messages[i]);
+		  rpc_param.messages[i] = NULL;
+		  CALLN (Ffuncall, callback, lisp);
+		}
+	      else
+		{
+		  printf ("XXXXXXXXXXXXXXXXXXXX Failed parsing..... \n");
+		}
+	    }
+	}
+    }
+
+  return Qnil;
+}
+
 DEFUN ("json-parse-string", Fjson_parse_string, Sjson_parse_string, 1, MANY,
        NULL,
        doc: /* Parse the JSON STRING into a Lisp object.
@@ -967,15 +1183,21 @@ usage: (json-parse-string STRING &rest ARGS) */)
 
   Lisp_Object string = args[0];
   CHECK_STRING (string);
-  Lisp_Object encoded = json_encode (string);
-  check_string_without_embedded_nulls (encoded);
+
   struct json_configuration conf =
     {json_object_hashtable, json_array_array, QCnull, QCfalse};
   json_parse_args (nargs - 1, args + 1, &conf, true);
 
+  Lisp_Object encoded = json_encode (string);
+  check_string_without_embedded_nulls (encoded);
+
   json_error_t error;
-  json_t *object
-    = json_loads (SSDATA (encoded), JSON_DECODE_ANY, &error);
+  struct json_parse_string_param j = {.data = SSDATA (encoded), .error = &error};
+
+  flush_stack_call_func (json_parse_string_callback, &j);
+
+  json_t *object = j.result;
+
   if (object == NULL)
     json_parse_error (&error);
 
@@ -1014,6 +1236,31 @@ json_read_buffer_callback (void *buffer, size_t buflen, void *data)
   d->point += count;
   return count;
 }
+
+struct json_parse_param
+{
+  struct json_read_buffer_data* data;
+  json_error_t* error;
+  json_t * result;
+};
+
+static void
+release_callback (void * arg)
+{
+  struct json_parse_param *j = arg;
+  struct thread_state *self = current_thread;
+
+  release_global_lock ();
+  sys_thread_yield ();
+
+  j->result
+    = json_load_callback (json_read_buffer_callback, j->data,
+  JSON_DECODE_ANY | JSON_DISABLE_EOF_CHECK,
+  j->error);
+
+  acquire_global_lock (self);
+}
+
 
 DEFUN ("json-parse-buffer", Fjson_parse_buffer, Sjson_parse_buffer,
        0, MANY, NULL,
@@ -1069,10 +1316,13 @@ usage: (json-parse-buffer &rest args) */)
   ptrdiff_t point = PT_BYTE;
   struct json_read_buffer_data data = {.point = point};
   json_error_t error;
-  json_t *object
-    = json_load_callback (json_read_buffer_callback, &data,
-                          JSON_DECODE_ANY | JSON_DISABLE_EOF_CHECK,
-                          &error);
+  message1("Start!");
+
+  struct json_parse_param j = {.data = &data, .error = &error};
+
+  flush_stack_call_func (release_callback, &j);
+
+  json_t *object = j.result;
 
   if (object == NULL)
     json_parse_error (&error);
@@ -1138,6 +1388,10 @@ syms_of_json (void)
 
   DEFSYM (Qjson_serialize, "json-serialize");
   DEFSYM (Qjson_parse_string, "json-parse-string");
+  DEFSYM (Qjson_rpc, "json-rpc");
+  DEFSYM (Qjson_rpc_connection, "json-rpc-connection");
+  DEFSYM (Qjson_rpc_send, "json-rpc-send");
+  DEFSYM (Qjson_rpc_close, "json-rpc-close");
   Fput (Qjson_serialize, Qpure, Qt);
   Fput (Qjson_serialize, Qside_effect_free, Qt);
   Fput (Qjson_parse_string, Qpure, Qt);
@@ -1154,5 +1408,8 @@ syms_of_json (void)
   defsubr (&Sjson_serialize);
   defsubr (&Sjson_insert);
   defsubr (&Sjson_parse_string);
+  defsubr (&Sjson_rpc);
+  defsubr (&Sjson_rpc_connection);
+  defsubr (&Sjson_rpc_send);
   defsubr (&Sjson_parse_buffer);
 }
