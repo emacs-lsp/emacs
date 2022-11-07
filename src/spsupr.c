@@ -1,6 +1,6 @@
 #include "spsupr.h"
 
-#if defined(__linux__) || defined(__FreeBSD__)
+#if defined(__linux__) || defined(__FreeBSD__) || defined(__APPLE__)
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
