@@ -1310,6 +1310,7 @@ DEFUN ("json-rpc", Fjson_rpc, Sjson_rpc, 1, MANY,
       }
     }
   CALLN (Ffuncall, callback, Qnil, Qnil, Qt);
+  param->handle->close(param->handle);
   return Qnil;
 }
 
