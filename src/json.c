@@ -1014,6 +1014,14 @@ CHECK_RPC_CONNECTION (Lisp_Object obj)
   CHECK_TYPE (USER_PTRP (obj), Quser_ptrp, obj);
 }
 
+static void
+json_rpc_state_free (void *ptr)
+{
+  struct json_rpc_state * state = ptr;
+  free(state->handle);
+  free(state);
+}
+
 DEFUN ("json-rpc-connection", Fjson_rpc_connection, Sjson_rpc_connection, 1, MANY,
        NULL,
        doc: /* Create JSONRPC connection. */)
@@ -1045,7 +1053,7 @@ DEFUN ("json-rpc-connection", Fjson_rpc_connection, Sjson_rpc_connection, 1, MAN
       struct json_rpc_state *state = malloc (sizeof (struct json_rpc_state));
       state->handle = handle;
       SAFE_FREE ();
-      return make_user_ptr (json_free, state);
+      return make_user_ptr (json_rpc_state_free, state);
     }
 }
 

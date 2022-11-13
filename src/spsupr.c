@@ -118,7 +118,6 @@ ssp_close(struct SSP_Handle *ssph)
 	close(h->err_fd);
 	close(h->io_fd);
 	(void)waitpid(h->pid, &status, WNOHANG);
-	free(h);
 }
 
 struct SSP_Handle *
