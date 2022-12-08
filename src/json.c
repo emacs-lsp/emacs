@@ -1086,6 +1086,7 @@ DEFUN ("json-rpc-connection", Fjson_rpc_connection, Sjson_rpc_connection, 1, MAN
       /* TODO: mutex_init could fail */
       state->handle = handle;
       state->done = false;
+      state->error_buffer_read = 0;
       SAFE_FREE ();
       return make_user_ptr (json_rpc_state_free, state);
     }
